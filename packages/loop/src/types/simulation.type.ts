@@ -245,11 +245,12 @@ export interface IGame<F = unknown> extends ISimulationStep, IPresentable<F> {}
  * @summary Drives fixed-timestep stepping over a game, knowing nothing of rendering.
  *
  * @description
- * `ISimulationDriver<G>` is the timing-only half of the engine loop. `advance(now)` integrates
- * the new timestamp and runs `game.step()` once per whole step owed. It exposes `clock` and
- * `metrics` read-only and the `game` it drives, but never invokes presentation and never sees
- * input directly (input arrives inside the step context). This separation is what later lets a
- * physics loop run at one rate while rendering runs at another.
+ * `ISimulationDriver<G>` is the timing-only half of the engine loop. `advance(now, input)`
+ * integrates the new timestamp and runs `game.step()` once per whole step owed, passing the
+ * frame's input snapshot into each step. It exposes `clock` and `metrics` read-only and the
+ * `game` it drives, but never invokes presentation — the caller samples input and drives
+ * presentation separately. This separation is what later lets a physics loop run at one rate
+ * while rendering runs at another.
  *
  * @template G - The concrete game type; defaults to `IGame`.
  *
@@ -270,10 +271,11 @@ export interface ISimulationDriver<G extends IGame = IGame> {
   /**
    * @summary Advance the simulation by a wall-clock sample.
    * @param now - Current monotonic timestamp, in nanoseconds.
+   * @param input - The input snapshot for this frame; shared by every step run.
    * @return The number of steps run.
    * @author MathAid
    */
-  advance(now: number): number;
+  advance(now: number, input: IInputState): number;
   /** Whether at least one whole step is owed. */
   readonly canStep: boolean;
 }

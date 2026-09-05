@@ -1,0 +1,118 @@
+/**
+ * @fileoverview
+ * @summary The fixed-timestep simulation driver — invokes a game's step at a fixed cadence.
+ *
+ * @description
+ * This module provides `FixedTimestepDriver`, the concrete `ISimulationDriver` that owns a
+ * `FrameClock` and `PerformanceMetrics` and runs `game.step()` once per whole step owed. It is
+ * pure and platform-free: it is driven by timestamps and input snapshots supplied from outside,
+ * so it never touches a scheduler, a clock, or a renderer — those are the caller's concerns.
+ *
+ * @author MathAid
+ */
+
+import { MAX_CATCHUP_STEPS, SecondMetric } from '../const';
+import type { IGame, IInputState, ISimulationDriver, Timestamp } from '../types';
+import { FrameClock } from './frame-clock';
+import { PerformanceMetrics } from './performance';
+
+/**
+ * @summary Drives a game's fixed-timestep stepping, decoupled from time and rendering.
+ *
+ * @description
+ * `FixedTimestepDriver<G>` integrates each `advance` call's timestamp into its `FrameClock` and
+ * then runs `game.step(context)` once per whole step owed, passing the frame's input snapshot
+ * into every step. Step count is bounded by `maxSteps` so a long stall cannot spiral into an
+ * unbounded catch-up loop; debt beyond the bound is discarded rather than replayed.
+ *
+ * It reports `clock`, `metrics`, and `game` read-only and never invokes presentation — the caller
+ * drives `present` and the renderer separately. This is what keeps simulation cadence
+ * independent of display cadence and render mode.
+ *
+ * @template G - The concrete game type; defaults to `IGame`.
+ *
+ * @example
+ * const driver = new FixedTimestepDriver(tetris, 60, host.now());
+ * const steps = driver.advance(host.now(), inputState);
+ *
+ * @see {@link ISimulationDriver}
+ * @see {@link FrameClock}
+ * @author MathAid
+ */
+export class FixedTimestepDriver<G extends IGame = IGame> implements ISimulationDriver<G> {
+  readonly #clock: FrameClock;
+  readonly #metrics: PerformanceMetrics;
+  readonly #game: G;
+  readonly #maxSteps: number;
+
+  /**
+   * @summary Construct a driver for a game at a fixed rate.
+   * @param game - The game to step.
+   * @param fps - Target simulation steps per second.
+   * @param startNanos - Initial timestamp to anchor the clock against, in nanoseconds.
+   * @param maxSteps - Maximum steps per `advance` call. Defaults to `MAX_CATCHUP_STEPS`.
+   * @author MathAid
+   */
+  constructor(game: G, fps: number, startNanos: Timestamp, maxSteps = MAX_CATCHUP_STEPS) {
+    this.#game = game;
+    this.#clock = new FrameClock(SecondMetric.NANOSECONDS / fps, startNanos);
+    this.#metrics = new PerformanceMetrics();
+    this.#maxSteps = maxSteps;
+  }
+
+  /**
+   * @summary Read-only timing state.
+   * @author MathAid
+   */
+  get clock(): FrameClock {
+    return this.#clock;
+  }
+
+  /**
+   * @summary Read-only performance metrics.
+   * @author MathAid
+   */
+  get metrics(): PerformanceMetrics {
+    return this.#metrics;
+  }
+
+  /**
+   * @summary The game being driven.
+   * @author MathAid
+   */
+  get game(): G {
+    return this.#game;
+  }
+
+  /**
+   * @summary Whether at least one whole step is owed.
+   * @author MathAid
+   */
+  get canStep(): boolean {
+    return this.#clock.pending >= 1;
+  }
+
+  /**
+   * @summary Advance the simulation by a wall-clock sample.
+   * @param nowNanos - Current monotonic timestamp, in nanoseconds.
+   * @param input - The input snapshot for this frame; shared by every step run.
+   * @return The number of steps actually run (bounded by `maxSteps`).
+   * @author MathAid
+   */
+  advance(nowNanos: Timestamp, input: IInputState): number {
+    this.#clock.advance(nowNanos);
+
+    let steps = 0;
+    while (this.#clock.pending >= 1 && steps < this.#maxSteps) {
+      this.#game.step({ clock: this.#clock, metrics: this.#metrics, input });
+      this.#clock.consume();
+      steps++;
+    }
+
+    // Discard any debt beyond the catch-up bound so a long stall does not replay.
+    if (this.#clock.pending >= 1) this.#clock.reset(nowNanos);
+
+    this.#metrics.record(steps, nowNanos);
+    return steps;
+  }
+}

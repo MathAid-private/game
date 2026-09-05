@@ -1,2 +1,7 @@
 export * from './event-emitter';
 export * from './game-loop';
+export * from './clock';
+export * from './scheduler';
+export * from './frame-clock';
+export * from './performance';
+export * from './simulation-driver';
