@@ -11,7 +11,7 @@
  * @author MathAid
  */
 
-import { MAX_CATCHUP_STEPS, SecondMetric } from '../const';
+import { FPS_CACHE_CAPACITY, MAX_CATCHUP_STEPS, SecondMetric } from '../const';
 import type { IGame, IInputState, ISimulationDriver, Timestamp } from '../types';
 import { FrameClock } from './frame-clock';
 import { PerformanceMetrics } from './performance';
@@ -51,12 +51,20 @@ export class FixedTimestepDriver<G extends IGame = IGame> implements ISimulation
    * @param fps - Target simulation steps per second.
    * @param startNanos - Initial timestamp to anchor the clock against, in nanoseconds.
    * @param maxSteps - Maximum steps per `advance` call. Defaults to `MAX_CATCHUP_STEPS`.
+   * @param historyCapacity - Number of one-second metric windows to retain. Defaults to
+   *   `FPS_CACHE_CAPACITY`.
    * @author MathAid
    */
-  constructor(game: G, fps: number, startNanos: Timestamp, maxSteps = MAX_CATCHUP_STEPS) {
+  constructor(
+    game: G,
+    fps: number,
+    startNanos: Timestamp,
+    maxSteps = MAX_CATCHUP_STEPS,
+    historyCapacity = FPS_CACHE_CAPACITY,
+  ) {
     this.#game = game;
     this.#clock = new FrameClock(SecondMetric.NANOSECONDS / fps, startNanos);
-    this.#metrics = new PerformanceMetrics();
+    this.#metrics = new PerformanceMetrics(historyCapacity);
     this.#maxSteps = maxSteps;
   }
 
