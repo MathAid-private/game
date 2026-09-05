@@ -4,7 +4,7 @@
  *
  * @description
  * Maps each `@games/*` package to its `src/index.ts` so tests run against source (no build step)
- * and exercise each package's public surface. Tests live under `packages/*/test/` and run in a
+ * and exercise each package's public surface. Tests live under `packages/** /test/` and run in a
  * Node environment.
  *
  * @author MathAid

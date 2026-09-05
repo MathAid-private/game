@@ -1,5 +1,12 @@
+import {
+  Engine,
+  ManualClock,
+  ManualScheduler,
+  SecondMetric,
+  type IGame,
+  type IHostLoop,
+} from '@games/loop';
 import { describe, expect, it } from 'vitest';
-import { Engine, ManualClock, ManualScheduler, SecondMetric, type IGame, type IHostLoop } from '@games/loop';
 
 /** A minimal host loop backed by the manual clock and scheduler. */
 function manualHost() {
