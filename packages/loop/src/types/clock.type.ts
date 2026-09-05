@@ -110,7 +110,7 @@ export interface IScheduleHandle {
  * browser runs it on `requestAnimationFrame`, sharing the same engine core.
  *
  * @example
- * const rAFScheduler: IScheduler = {
+ * const RAFScheduler: IScheduler = {
  *   schedule: (step) => ({ id: Symbol(requestAnimationFrame((t) => step(t * 1e6))) }),
  *   cancel: (handle) => cancelAnimationFrame(Number(handle.id.description)),
  * };

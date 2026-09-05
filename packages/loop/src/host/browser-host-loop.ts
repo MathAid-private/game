@@ -1,6 +1,6 @@
 /**
  * @fileoverview
- * @summary The composed browser host loop — a `NanoClock` plus an `rAFScheduler`.
+ * @summary The composed browser host loop — a `NanoClock` plus an `RAFScheduler`.
  *
  * @description
  * This module provides `BrowserHostLoop`, the ready-made `IHostLoop` for a browser: a monotonic
@@ -13,14 +13,14 @@
 
 import type { IHostLoop, IScheduleHandle, Timestamp } from '../types';
 import { NanoClock } from './nano-clock';
-import { rAFScheduler } from './raf-scheduler';
+import { RAFScheduler } from './raf-scheduler';
 
 /**
  * @summary The browser's clock + scheduler, composed for the engine.
  *
  * @description
  * `BrowserHostLoop` satisfies `IHostLoop` by delegating `now` to a `NanoClock` and
- * `schedule`/`cancel` to an `rAFScheduler`. It is a plain composition of the two adapters, so a
+ * `schedule`/`cancel` to an `RAFScheduler`. It is a plain composition of the two adapters, so a
  * host that needs a custom clock or scheduler can substitute either half independently. It is the
  * drop-in browser counterpart to a manual clock + manual scheduler pair used in tests.
  *
@@ -29,12 +29,12 @@ import { rAFScheduler } from './raf-scheduler';
  *
  * @see {@link IHostLoop}
  * @see {@link NanoClock}
- * @see {@link rAFScheduler}
+ * @see {@link RAFScheduler}
  * @author MathAid
  */
 export class BrowserHostLoop implements IHostLoop {
   readonly #clock = new NanoClock();
-  readonly #scheduler = new rAFScheduler();
+  readonly #scheduler = new RAFScheduler();
 
   /**
    * @summary Read the current monotonic time.
