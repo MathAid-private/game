@@ -44,7 +44,7 @@ export type InputAction = string;
  *
  * @example
  * if (input.wasPressed('rotate')) board.rotateActive();
- * if (input.isDown('move-right')) player.translate(+1);
+ * if (input.isDown('move-right')) player.translate(1);
  *
  * @see {@link IInputSource}
  * @author MathAid
