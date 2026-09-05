@@ -4,7 +4,7 @@
 > **Status:** Draft — describes the intended build and packaging model.
 
 This document describes how the `@games` engine is built, how the monorepo is laid out, and how
-the engine is meant to be consumed *outside* the bundled games — as a set of published packages
+the engine is meant to be consumed _outside_ the bundled games — as a set of published packages
 with a stable contract surface.
 
 ---
@@ -27,16 +27,16 @@ source (packages/*/src) ──tsc──▶ dist (packages/*/dist) ──▶ cons
 ### ASCII — build flow
 
 ```
-┌───────────────┐   pnpm --filter "@games/*" run build   ┌───────────────┐
+┌───────────────┐   pnpm --filter "@games/*" run build   ┌────────────────┐
 │ packages/*/src│ ─────────────────────────────────────▶ │ packages/*/dist│
-│ (TypeScript)  │           tsc, one package at a time   │ (ESM + .d.ts) │
-└───────────────┘                                        └───────┬───────┘
-                                                                │ "main"/"types"
-                                                ┌───────────────▼───────────────┐
+│ (TypeScript)  │           tsc, one package at a time   │ (ESM + .d.ts)  │
+└───────────────┘                                        └───────┬────────┘
+                                                                 │ "main"/"types"
+                                                ┌────────────────▼───────────────┐
                                                 │ apps/web (Vite, TypeScript)    │
                                                 │ bundles loop→render→games into │
                                                 │ a single browser entry         │
-                                                └───────────────────────────────┘
+                                                └────────────────────────────────┘
 ```
 
 ### Mermaid — build & consume flow
@@ -133,13 +133,13 @@ game/
 
 ## 4. Workspace scripts
 
-| Script | Effect |
-|---|---|
-| `pnpm run build` | build all `@games/*` packages in dependency order |
-| `pnpm run dev` | watch packages (`tsc --watch`) + run the Vite app |
-| `pnpm run lint` / `lint:fix` | ESLint (flat config) |
-| `pnpm run format` | Prettier |
-| `pnpm run clean` | remove `dist` / `node_modules` |
+| Script                       | Effect                                            |
+| ---------------------------- | ------------------------------------------------- |
+| `pnpm run build`             | build all `@games/*` packages in dependency order |
+| `pnpm run dev`               | watch packages (`tsc --watch`) + run the Vite app |
+| `pnpm run lint` / `lint:fix` | ESLint (flat config)                              |
+| `pnpm run format`            | Prettier                                          |
+| `pnpm run clean`             | remove `dist` / `node_modules`                    |
 
 ---
 

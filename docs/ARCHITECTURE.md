@@ -45,7 +45,7 @@ The redesign follows one rule: **the game describes *what* to draw; an `IRendere
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
 │  GAME LAYER  (pure, portable — no platform imports)                        │
-│  Tetris · Snake · Space Invaders  — each implements IGame                 │
+│  Tetris · Snake · Space Invaders  — each implements IGame                  │
 │  step(ctx) = advance simulation    present(ctx) = emit RenderCommands      │
 └───────────────────────────────────┬────────────────────────────────────────┘
                                     │ emits IFrame (renderer-agnostic commands)
@@ -57,7 +57,7 @@ The redesign follows one rule: **the game describes *what* to draw; an `IRendere
              │ implemented by                 │ implemented by
 ┌────────────▼───────────────┐   ┌────────────▼──────────────────────────────┐
 │  INPUT ADAPTERS            │   │  RENDER ADAPTERS  (render modes)          │
-│  IInputSource              │   │  IRenderer                                 │
+│  IInputSource              │   │  IRenderer                                │
 │   ├ KeyboardSource         │   │   ├ Canvas2DRenderer                      │
 │   ├ GamepadSource          │   │   ├ WebGLRenderer                         │
 │   └ TouchSource · Remote   │   │   ├ TerminalRenderer                      │
@@ -65,7 +65,7 @@ The redesign follows one rule: **the game describes *what* to draw; an `IRendere
                                  └───────────────────────────────────────────┘
 ┌────────────────────────────┬───────────────────────────────────────────────┐
 │  TIME / SCHEDULING ADAPTERS                                                │
-│  IClock (performance.now) · IScheduler (rAF | MessageChannel | manual)    │
+│  IClock (performance.now) · IScheduler (rAF | MessageChannel | manual)     │
 └────────────────────────────┴───────────────────────────────────────────────┘
 ```
 
