@@ -12,22 +12,11 @@
  * @author MathAid
  */
 
-import type {
-  IGame,
-  IPresentationContext,
-  ISimulationContext,
-} from '@games/loop';
+import type { IGame, IPresentationContext, ISimulationContext } from '@games/loop';
 import type { Color, Rect } from '@games/math';
 import type { IFrameBuilder } from '@games/render';
 import { mulberry32 } from './random';
-import {
-  COLORS,
-  PIECE_TYPES,
-  SHAPES,
-  rotate,
-  type Mino,
-  type PieceType,
-} from './tetromino';
+import { COLORS, PIECE_TYPES, SHAPES, rotate, type Mino, type PieceType } from './tetromino';
 
 /** Board width, in cells. */
 const COLS = 10;
@@ -290,9 +279,7 @@ export class Tetris implements IGame<IFrameBuilder> {
    * @author MathAid
    */
   #hardDrop(): void {
-    while (
-      !this.#collides(this.#current.cells.map((m) => ({ col: m.col, row: m.row + 1 })))
-    ) {
+    while (!this.#collides(this.#current.cells.map((m) => ({ col: m.col, row: m.row + 1 })))) {
       this.#current.cells = this.#current.cells.map((m) => ({ col: m.col, row: m.row + 1 }));
     }
     this.#lock();

@@ -17,7 +17,7 @@ describe('FixedTimestepDriver', () => {
     const game: IGame = { step: () => void steps++, present: () => {} };
     const driver = new FixedTimestepDriver(game, 60, 0);
 
-    driver.advance((SecondMetric.NANOSECONDS / 60) / 2, NullInputState.INSTANCE);
+    driver.advance(SecondMetric.NANOSECONDS / 60 / 2, NullInputState.INSTANCE);
     expect(steps).toBe(0);
   });
 

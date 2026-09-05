@@ -1,7 +1,7 @@
 {
   /* --- Default Formatter Setup --- */
   "editor.defaultFormatter": "esbenp.prettier-vscode",
-  "editor.formatOnSave": true,
+  // "editor.formatOnSave": true,
 
   /* --- Code Action & Linting Automation --- */
   "editor.codeActionsOnSave": {

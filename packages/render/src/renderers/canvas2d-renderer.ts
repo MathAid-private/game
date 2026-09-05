@@ -124,7 +124,12 @@ export class Canvas2DRenderer implements IRenderer {
         this.#text(command.text, command.position.x, command.position.y, command.style);
         break;
       case 'sprite':
-        this.#sprite(command.transform.x, command.transform.y, command.transform.scaleX ?? 1, command.transform.scaleY ?? 1);
+        this.#sprite(
+          command.transform.x,
+          command.transform.y,
+          command.transform.scaleX ?? 1,
+          command.transform.scaleY ?? 1,
+        );
         break;
       case 'push':
         this.#ctx.save();

@@ -2,7 +2,11 @@ import { FrameBuilder, type IFrameBuilder, type RenderCommand } from '@games/ren
 import type { IGame, IInputState, ISimulationContext } from '@games/loop';
 
 /** An input snapshot with every action released. */
-export const noInput: IInputState = { isDown: () => false, wasPressed: () => false, wasReleased: () => false };
+export const noInput: IInputState = {
+  isDown: () => false,
+  wasPressed: () => false,
+  wasReleased: () => false,
+};
 
 /** Present a game into a fresh frame builder and return its commands. */
 export function present(game: IGame<IFrameBuilder>): RenderCommand[] {

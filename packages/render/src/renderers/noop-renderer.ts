@@ -11,8 +11,8 @@
  * @author MathAid
  */
 
-import type { IRenderer, IRendererCapabilities } from '../renderer';
 import type { IFrame } from '../frame';
+import type { IRenderer, IRendererCapabilities } from '../renderer';
 
 /**
  * @summary Capabilities advertised by a surface that draws nothing.
@@ -51,7 +51,7 @@ export class NoopRenderer implements IRenderer {
 
   /**
    * @summary Discard the frame.
-   * @param frame - Ignored.
+   * @param _frame - Ignored.
    * @author MathAid
    */
   render(_frame: IFrame): void {}

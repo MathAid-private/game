@@ -13,11 +13,7 @@
  */
 
 import { rectsIntersect, type Color, type Rect } from '@games/math';
-import type {
-  IGame,
-  IPresentationContext,
-  ISimulationContext,
-} from '@games/loop';
+import type { IGame, IPresentationContext, ISimulationContext } from '@games/loop';
 import type { IFrameBuilder } from '@games/render';
 import { mulberry32 } from './random';
 
@@ -170,12 +166,20 @@ export class SpaceInvaders implements IGame<IFrameBuilder> {
     if (this.#gameOver) return;
     const input = context.input;
 
-    if (input.isDown(INVADERS_ACTIONS.left)) this.#playerX = Math.max(PLAY_X, this.#playerX - PLAYER_SPEED);
+    if (input.isDown(INVADERS_ACTIONS.left))
+      this.#playerX = Math.max(PLAY_X, this.#playerX - PLAYER_SPEED);
     if (input.isDown(INVADERS_ACTIONS.right)) {
       this.#playerX = Math.min(PLAY_X + PLAY_WIDTH - PLAYER_WIDTH, this.#playerX + PLAYER_SPEED);
     }
-    if (input.wasPressed(INVADERS_ACTIONS.shoot) && this.#playerBullets().length < MAX_PLAYER_BULLETS) {
-      this.#bullets.push({ x: this.#playerX + PLAYER_WIDTH / 2 - BULLET_WIDTH / 2, y: PLAYER_Y, dy: -1 });
+    if (
+      input.wasPressed(INVADERS_ACTIONS.shoot) &&
+      this.#playerBullets().length < MAX_PLAYER_BULLETS
+    ) {
+      this.#bullets.push({
+        x: this.#playerX + PLAYER_WIDTH / 2 - BULLET_WIDTH / 2,
+        y: PLAYER_Y,
+        dy: -1,
+      });
     }
 
     this.#stepCounter++;
@@ -213,10 +217,22 @@ export class SpaceInvaders implements IGame<IFrameBuilder> {
       frame.rect({ x: bullet.x, y: bullet.y, width: BULLET_WIDTH, height: BULLET_HEIGHT }, color);
     }
 
-    frame.text(`SCORE ${this.#score}`, { x: PLAY_X, y: 4 }, { color: { r: 1, g: 1, b: 1, a: 1 }, size: 12 });
-    frame.text(`LIVES ${this.#lives}`, { x: PLAY_X + 120, y: 4 }, { color: { r: 1, g: 1, b: 1, a: 1 }, size: 12 });
+    frame.text(
+      `SCORE ${this.#score}`,
+      { x: PLAY_X, y: 4 },
+      { color: { r: 1, g: 1, b: 1, a: 1 }, size: 12 },
+    );
+    frame.text(
+      `LIVES ${this.#lives}`,
+      { x: PLAY_X + 120, y: 4 },
+      { color: { r: 1, g: 1, b: 1, a: 1 }, size: 12 },
+    );
     if (this.#gameOver) {
-      frame.text('GAME OVER', { x: PLAY_X + 130, y: 240 }, { color: { r: 1, g: 0.3, b: 0.3, a: 1 }, size: 24 });
+      frame.text(
+        'GAME OVER',
+        { x: PLAY_X + 130, y: 240 },
+        { color: { r: 1, g: 0.3, b: 0.3, a: 1 }, size: 24 },
+      );
     }
   }
 
@@ -273,7 +289,11 @@ export class SpaceInvaders implements IGame<IFrameBuilder> {
     if (shooters.length === 0) return;
     const shooter = shooters[Math.floor(this.#rng() * shooters.length)];
     const rect = this.#invaderRect(shooter);
-    this.#bullets.push({ x: rect.x + INVADER_WIDTH / 2 - BULLET_WIDTH / 2, y: rect.y + INVADER_HEIGHT, dy: 1 });
+    this.#bullets.push({
+      x: rect.x + INVADER_WIDTH / 2 - BULLET_WIDTH / 2,
+      y: rect.y + INVADER_HEIGHT,
+      dy: 1,
+    });
   }
 
   /**
@@ -297,7 +317,12 @@ export class SpaceInvaders implements IGame<IFrameBuilder> {
     const playerRects = this.#playerRect();
     for (let i = this.#bullets.length - 1; i >= 0; i--) {
       const bullet = this.#bullets[i];
-      const bulletRect: Rect = { x: bullet.x, y: bullet.y, width: BULLET_WIDTH, height: BULLET_HEIGHT };
+      const bulletRect: Rect = {
+        x: bullet.x,
+        y: bullet.y,
+        width: BULLET_WIDTH,
+        height: BULLET_HEIGHT,
+      };
       let hit = false;
 
       if (bullet.dy < 0) {

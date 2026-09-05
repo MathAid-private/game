@@ -12,11 +12,7 @@
  */
 
 import type { Color } from '@games/math';
-import type {
-  IGame,
-  IPresentationContext,
-  ISimulationContext,
-} from '@games/loop';
+import type { IGame, IPresentationContext, ISimulationContext } from '@games/loop';
 import type { IFrameBuilder } from '@games/render';
 import { mulberry32 } from './random';
 
@@ -201,7 +197,8 @@ export class Snake implements IGame<IFrameBuilder> {
    * @author MathAid
    */
   #turn(next: Direction): void {
-    const effective = this.#queue.length > 0 ? this.#queue[this.#queue.length - 1] : this.#direction;
+    const effective =
+      this.#queue.length > 0 ? this.#queue[this.#queue.length - 1] : this.#direction;
     if (next.dc === -effective.dc && next.dr === -effective.dr) return;
     this.#queue.push(next);
   }

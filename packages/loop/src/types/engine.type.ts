@@ -100,8 +100,9 @@ export type EngineEvents<R = unknown> = {
  * @see {@link EngineEvents}
  * @author MathAid
  */
-export interface IEngine<G extends IGame = IGame, R = unknown>
-  extends IEventEmitter<EngineEvents<R>> {
+export interface IEngine<G extends IGame = IGame, R = unknown> extends IEventEmitter<
+  EngineEvents<R>
+> {
   /** Static configuration set at construction. */
   readonly configuration: IEngineConfig;
   /** The game this engine drives. */

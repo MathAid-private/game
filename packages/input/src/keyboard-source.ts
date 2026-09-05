@@ -116,10 +116,7 @@ export class KeyboardSource implements IInputSource {
    * @param target - The window to listen on. Defaults to the global `window`.
    * @author MathAid
    */
-  constructor(
-    bindings: Readonly<Record<InputAction, readonly string[]>>,
-    target: Window = window,
-  ) {
+  constructor(bindings: Readonly<Record<InputAction, readonly string[]>>, target: Window = window) {
     const byCode = new Map<string, InputAction>();
     for (const [action, codes] of Object.entries(bindings)) {
       for (const code of codes) byCode.set(code, action);

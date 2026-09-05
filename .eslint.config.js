@@ -17,17 +17,17 @@ export default tseslint.config(
     },
     rules: {
       // Styling rules aligned with Standard JS practices
-      'quotes': ['error', 'single', { 'avoidEscape': true }],
-      'semi': ['error', 'always'],
+      quotes: ['error', 'single', { avoidEscape: true }],
+      semi: ['error', 'always'],
       'no-trailing-spaces': 'error',
       'eol-last': ['error', 'always'],
-      'indent': ['error', 2, { 'SwitchCase': 1 }],
-      
+      indent: ['error', 2, { SwitchCase: 1 }],
+
       // Strict TypeScript code quality rules
-      '@typescript-eslint/no-unused-vars': ['warn', { 'argsIgnorePattern': '^_' }],
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       '@typescript-eslint/no-explicit-any': 'warn',
-      
+
       // Enforce strict import ordering
       'import/order': [
         'error',
@@ -38,5 +38,5 @@ export default tseslint.config(
         },
       ],
     },
-  }
+  },
 );
