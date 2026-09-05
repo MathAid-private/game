@@ -12,7 +12,7 @@ export default defineConfig({
   // },
   optimizeDeps: {
     // ⚡ PREVENTS CACHING: Tells Vite not to pre-bundle these packages into .vite/deps
-    exclude: ['@games/loop', '@games/controllers', '@games/web-drivers'],
+    exclude: ['@games/loop', '@games/render', '@games/input', '@games/apps'],
   },
   watch: {
     // Forces Vite to track filesystem changes inside your symlinked packages

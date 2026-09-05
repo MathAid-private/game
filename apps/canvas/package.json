@@ -9,7 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@games/apps": "workspace:*"
+    "@games/apps": "workspace:*",
+    "@games/input": "workspace:*",
+    "@games/loop": "workspace:*",
+    "@games/render": "workspace:*"
   },
   "devDependencies": {
     "vite": "^8.1.5"
