@@ -4,7 +4,7 @@
  *
  * @description
  * A minimal, environment-agnostic publish/subscribe interface used by
- * `IGame`, `IDeltaAccumulator`, and `IGamePerformance` to expose
+ * `IEngine` and the engine's components to expose
  * lifecycle and timing signals without coupling to `EventTarget`,
  * `EventEmitter`, or any platform-specific API.
  *
@@ -69,7 +69,7 @@ export type Unsubscribe = () => void;
  * @summary Environment-agnostic typed event emitter.
  *
  * @description
- * Implemented by `IGame`, `IDeltaAccumulator`, and `IGamePerformance`
+ * Implemented by `IEngine` (composing `EventEmitter`) and other emitters
  * to expose lifecycle and timing signals. The generic `M` is an object
  * type whose keys are event names and whose values are payload types.
  * `void` payloads emit with no argument.

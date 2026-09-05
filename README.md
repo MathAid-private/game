@@ -98,7 +98,7 @@ sequence diagram, and a PlantUML view live in
 
 | Package | Scope | Contracts |
 |---|---|---|
-| `@games/loop` | engine core (agnostic) | `IClock`, `IScheduler`, `IFrameClock`, `ISimulationDriver`, `IFrameDriver`, `IEventSource`, `IEngine`, `IGame` |
+| `@games/loop` | engine core (agnostic) | `IClock`, `IScheduler`, `IFrameClock`, `ISimulationDriver`, `IFrameDriver`, `IEventEmitter`, `IEngine`, `IGame` |
 | `@games/render` | render modes | `IRenderer`, `IFrame`, `IFrameBuilder`, `RenderCommand` + concrete renderers |
 | `@games/input` | input adapters | `IInputSource`, `IInputState`, `InputAction` + keyboard/gamepad |
 | `@games/math` | leaf utilities | `Vec2`, `Point2D`, `Rect`, `Transform2D`, `Color`, grid + AABB helpers |
@@ -130,5 +130,6 @@ The demo host lives in `apps/web` (TypeScript) and boots any game through the sa
 | [`docs/JSDOC.md`](docs/JSDOC.md) | the normative js-doc comment standard |
 | [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md) | build, package layout, and how to consume the engine |
 
-> The engine is a learning project in active redesign. Interfaces are stabilizing per
-> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md); see [`docs/PLAN.md`](docs/PLAN.md) for status.
+> The engine and its three games are implemented and type-checked. See
+> [`docs/PLAN.md`](docs/PLAN.md) for the roadmap and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+> for the interface rationale.

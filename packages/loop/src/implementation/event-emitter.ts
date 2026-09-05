@@ -8,10 +8,9 @@
  * being a `Set` of handler functions. `Set` membership gives O(1)
  * deduplication and O(1) removal without index bookkeeping.
  *
- * Intended as a private field on `GamePerformance`, `DeltaAccumulator`,
- * and `Game` — not as a superclass. Classes compose the emitter and
- * delegate `on`/`off`/`emit` to it, keeping their own inheritance
- * chain free.
+ * Intended as a private field on `Engine` and other components — not as a
+ * superclass. Classes compose the emitter and delegate `on`/`off`/`emit`
+ * to it, keeping their own inheritance chain free.
  *
  * Error isolation: if a handler throws, the remaining handlers for
  * that emission still run. All thrown values are collected and
@@ -162,7 +161,7 @@ export class EventEmitter<M extends Record<string, unknown>> implements IEventEm
    * @summary Remove all handlers for all events.
    *
    * @description
-   * Used during `Game.stop()` to prevent stale closures from holding
+   * Used during `Engine.stop()` to prevent stale closures from holding
    * references after teardown. Clears every bucket entirely.
    */
   clear(): void {

@@ -1,7 +1,7 @@
 # Game Engine Redesign — Project Plan & Timetable
 
-> **Status:** Draft — awaiting review before any code changes.
-> **Approach:** Incremental refactor of the existing monorepo. Every code change requires explicit approval before it is made.
+> **Status:** Implemented — the decoupled engine, three games, and TypeScript host are complete; legacy cleanup and package renames are done.
+> **Approach:** Incremental refactor of the existing monorepo, one small commit per change.
 > **Author:** MathAid
 
 ---
