@@ -1,0 +1,17 @@
+*,
+:root {
+  margin: 0px;
+  padding: 0px;
+}
+body {
+  width: 100dvw;
+  height: 100dvh;
+  background-color: rgb(48, 42, 42);
+}
+
+canvas {
+  width: 90%;
+  height: 90%;
+  background-color: rgb(170, 109, 109);
+  border-radius: 5px;
+}
