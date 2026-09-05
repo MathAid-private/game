@@ -1,0 +1,16 @@
+{
+  "name": "@games/input",
+  "version": "0.0.1",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@games/loop": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}
