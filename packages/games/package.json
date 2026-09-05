@@ -11,7 +11,8 @@
     "@games/loop": "workspace:*",
     "@games/controllers": "workspace:*",
     "@games/web-drivers": "workspace:*",
-    "@games/math": "workspace:*"
+    "@games/math": "workspace:*",
+    "@games/render": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^7.0.2"
