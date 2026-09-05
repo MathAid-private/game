@@ -12,7 +12,7 @@ export default defineConfig({
   // },
   optimizeDeps: {
     // ⚡ PREVENTS CACHING: Tells Vite not to pre-bundle these packages into .vite/deps
-    exclude: ['@games/loop', '@games/render', '@games/input', '@games/apps'],
+    exclude: ['@games/loop', '@games/render', '@games/input', '@games/games'],
   },
   watch: {
     // Forces Vite to track filesystem changes inside your symlinked packages

@@ -1,5 +1,5 @@
 {
-  "name": "@games/canvas",
+  "name": "@games/web",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@games/apps": "workspace:*",
+    "@games/games": "workspace:*",
     "@games/input": "workspace:*",
     "@games/loop": "workspace:*",
     "@games/render": "workspace:*"

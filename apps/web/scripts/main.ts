@@ -12,9 +12,6 @@
  * @author MathAid
  */
 
-import { BrowserHostLoop, Engine, type IGame, type PresentFrame } from '@games/loop';
-import { Canvas2DRenderer, FrameBuilder, type IFrameBuilder, type IRenderer } from '@games/render';
-import { KeyboardSource } from '@games/input';
 import {
   INVADERS_ACTIONS,
   SNAKE_ACTIONS,
@@ -22,7 +19,10 @@ import {
   SpaceInvaders,
   TETRIS_ACTIONS,
   Tetris,
-} from '@games/apps';
+} from '@games/games';
+import { KeyboardSource } from '@games/input';
+import { BrowserHostLoop, Engine, type IGame, type PresentFrame } from '@games/loop';
+import { Canvas2DRenderer, FrameBuilder, type IFrameBuilder, type IRenderer } from '@games/render';
 
 /** Logical canvas size, in device-independent pixels. */
 const WIDTH = 440;
@@ -32,7 +32,7 @@ const HEIGHT = 520;
 type GameId = 'tetris' | 'snake' | 'invaders';
 
 /** The game currently booted. Change this to run a different game. */
-const GAME: GameId = 'tetris';
+const GAME: GameId = 'invaders';
 
 /**
  * @summary The game instance and its key bindings, by id.
@@ -45,7 +45,10 @@ const GAME: GameId = 'tetris';
  * @return The game and a bindings map keyed by logical action.
  * @author MathAid
  */
-function selectGame(id: GameId): { game: IGame<IFrameBuilder>; bindings: Record<string, readonly string[]> } {
+function selectGame(id: GameId): {
+  game: IGame<IFrameBuilder>;
+  bindings: Record<string, readonly string[]>;
+} {
   switch (id) {
     case 'tetris':
       return {
@@ -95,7 +98,11 @@ const keyboard = new KeyboardSource(bindings);
 /**
  * The render glue: describe the frame into a builder, then hand it to the active renderer.
  */
-const present: PresentFrame<IGame<IFrameBuilder>, IRenderer> = ({ game: current, alpha, renderer: active }) => {
+const present: PresentFrame<IGame<IFrameBuilder>, IRenderer> = ({
+  game: current,
+  alpha,
+  renderer: active,
+}) => {
   const frame = new FrameBuilder();
   current.present({ alpha, frame });
   active?.render(frame);

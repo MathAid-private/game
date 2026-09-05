@@ -5,17 +5,17 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,json,html,css}\"",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "build": "pnpm --filter \"@game/*\" --recursive run build",
+    "build": "pnpm run build:packages",
     "dev:packages": "pnpm --filter \"./packages/**\" recursive --parallel run dev",
-    "clean:packages": "if exist packages\\loop\\node_modules rmdir /s /q packages\\loop\\node_modules && if exist packages\\loop\\dist rmdir /s /q packages\\loop\\dist && if exist packages\\controllers\\node_modules rmdir /s /q packages\\controllers\\node_modules && if exist packages\\controllers\\dist rmdir /s /q packages\\controllers\\dist && if exist packages\\web-drivers\\node_modules rmdir /s /q packages\\web-drivers\\node_modules && if exist packages\\web-drivers\\dist rmdir /s /q packages\\web-drivers\\dist",
-    "clean:apps": "if exist apps\\canvas\\node_modules rmdir /s /q apps\\canvas\\node_modules && if exist apps\\canvas\\.vite rmdir /s /q apps\\canvas\\.vite && if exist dist rmdir /s /q dist",
+    "clean:packages": "if exist packages\\loop\\node_modules rmdir /s /q packages\\loop\\node_modules && if exist packages\\loop\\dist rmdir /s /q packages\\loop\\dist && if exist packages\\math\\node_modules rmdir /s /q packages\\math\\node_modules && if exist packages\\math\\dist rmdir /s /q packages\\math\\dist && if exist packages\\render\\node_modules rmdir /s /q packages\\render\\node_modules && if exist packages\\render\\dist rmdir /s /q packages\\render\\dist && if exist packages\\input\\node_modules rmdir /s /q packages\\input\\node_modules && if exist packages\\input\\dist rmdir /s /q packages\\input\\dist && if exist packages\\games\\node_modules rmdir /s /q packages\\games\\node_modules && if exist packages\\games\\dist rmdir /s /q packages\\games\\dist",
+    "clean:apps": "if exist apps\\web\\node_modules rmdir /s /q apps\\web\\node_modules && if exist apps\\web\\.vite rmdir /s /q apps\\web\\.vite && if exist dist rmdir /s /q dist",
     "clean:root": "if exist node_modules rmdir /s /q node_modules",
     "clean": "pnpm run clean:packages && pnpm run clean:apps && pnpm run clean:root",
     "build:packages": "pnpm --filter \"./packages/**\" recursive run build",
     "nuke": "pnpm run clean && pnpm install && pnpm run build:packages",
     "watch:packages": "pnpm -r --filter \"./packages/**\" --parallel run dev",
-    "dev:canvas": "pnpm --filter @games/canvas dev",
-    "dev": "concurrently -n \"TSC,VITE\" -c \"blue,green\" \"pnpm run watch:packages\" \"pnpm run dev:canvas\""
+    "dev:web": "pnpm --filter @games/web dev",
+    "dev": "concurrently -n \"TSC,VITE\" -c \"blue,green\" \"pnpm run watch:packages\" \"pnpm run dev:web\""
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
