@@ -26,6 +26,7 @@ import type {
   IInputSource,
   IInputState,
   IScheduleHandle,
+  Timestamp,
 } from '../types';
 import { EventEmitter } from './event-emitter';
 import { CompositeInputState, NullInputState } from './input';
@@ -222,9 +223,8 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
    * @author MathAid
    */
   async run(): Promise<void> {
-    const loop = () => {
+    const loop = (nowNanos: Timestamp) => {
       if (!this.#paused) {
-        const nowNanos = this.#host.now();
         const input = this.#sampleInput();
         this.#simulation.advance(nowNanos, input);
         this.#present?.({

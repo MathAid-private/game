@@ -93,8 +93,8 @@ export interface IClock {
  * @author MathAid
  */
 export interface IScheduleHandle {
-  /** Opaque identity of the scheduled step, unique within the owning scheduler. */
-  readonly id: symbol;
+  /** Opaque cancellation token, interpreted only by the scheduler that created it. */
+  readonly token: unknown;
 }
 
 /**

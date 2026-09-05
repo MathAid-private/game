@@ -40,7 +40,7 @@ export class ManualScheduler implements IScheduler {
    */
   schedule(step: (now: Timestamp) => void): IScheduleHandle {
     this.#step = step;
-    return { id: Symbol('manual-scheduler') };
+    return { token: null };
   }
 
   /**
