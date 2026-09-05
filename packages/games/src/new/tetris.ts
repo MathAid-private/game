@@ -19,6 +19,7 @@ import type {
 } from '@games/loop';
 import type { Color, Rect } from '@games/math';
 import type { IFrameBuilder } from '@games/render';
+import { mulberry32 } from './random';
 import {
   COLORS,
   PIECE_TYPES,
@@ -60,29 +61,6 @@ export const TETRIS_ACTIONS = {
   softDrop: 'soft-drop',
   hardDrop: 'hard-drop',
 } as const;
-
-/**
- * @summary A small, seeded, deterministic PRNG (mulberry32).
- *
- * @description
- * `mulberry32` returns a function producing pseudo-random floats in `[0, 1)` from a 32-bit seed.
- * Seeded randomness is what makes the piece queue deterministic, so a game and its tests replay
- * identically.
- *
- * @param seed - A 32-bit unsigned seed.
- * @return A zero-argument function producing the next pseudo-random float.
- *
- * @author MathAid
- */
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 /**
  * @summary A seven-bag randomiser: each of the seven pieces appears once per shuffle.
