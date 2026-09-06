@@ -129,6 +129,7 @@ The demo host lives in `apps/web` (TypeScript) and boots any game through the sa
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | interface hierarchy + ASCII/Mermaid/PlantUML diagrams |
 | [`docs/JSDOC.md`](docs/JSDOC.md) | the normative js-doc comment standard |
 | [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md) | build, package layout, and how to consume the engine |
+| [`docs/EXTENDING.md`](docs/EXTENDING.md) | simulation step strategies + the pause request/ownership boundary |
 
 > The engine and its three games are implemented and type-checked. See
 > [`docs/PLAN.md`](docs/PLAN.md) for the roadmap and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
