@@ -78,78 +78,106 @@ new `ISimulationDriver` with no change to engine, game, or host.
 
 ---
 
-## 2. Pause — event-based request (option D)
+## 2. Pause — game-local scene + engine throttle
 
-### 2.1 The gap
+### 2.1 Requirements
 
-Pause is owned by the engine (`IEngine.paused` + the `paused`/`resumed` events + clock reset) and is
-**not reachable from `IGame`** — `step`/`present` return `void` and the context has no pause channel.
-Only external code can set `engine.paused`.
+A correct pause must let the game, on its own, do all three:
 
-### 2.2 Chosen design
+1. **Stall its presentation** — animations freeze; the world stops moving on screen.
+2. **Stop input reaching the simulation** — gameplay input (move, shoot, rotate) must not reach the
+   world/characters while paused.
+3. **Draw a pause screen and navigate it** — a menu the player can interact with.
 
-The game **emits a request event**; the engine **subscribes and owns the state**. This mirrors the
-engine's own `IEventEmitter` pattern, so the `IGame`↔`IEngine` relationship is symmetric: both are
-emitters, and the game's request events are the mirror image of the engine's state events.
+### 2.2 What the "overlay mode" phrasing gets wrong
 
-### 2.3 Proposal: game-emitted request events
+- **"Overlay" implies a second rendering layer** stacked on top of the game. There is no such layer:
+  the game's `present` already draws the *entire* frame. Drawing a pause screen is just a **branch in
+  `present`** — when the game is in its `paused` scene, draw the pause screen (a dimmed snapshot of the
+  world plus a menu) instead of the live world. No separate overlay object is needed.
+- **"Only starts running when paused" is backwards** — `present` runs every frame. The pause screen is
+  not a thing that "starts"; it is a state-dependent branch of the always-running `present`.
+- **It conflates two orthogonal concerns**: the game's *scene* (playing vs paused vs menu) and the
+  engine's *loop cadence* (full-rate fixed-timestep vs throttled GUI). These should be designed
+  separately.
+- **The "weaker repaint schedule" is an optimisation, not a requirement** — worth having, but it is
+  independent of the core pause behaviour. Wiring it into the core design over-complicates it.
 
-**Step 1 — define the request events the game may emit:**
+The requirements are actually satisfied by a **game-local state machine** (the earlier Option E),
+refined as follows.
+
+### 2.3 The refined proposal: scene + request + throttle
+
+**Part A — the game owns a scene.** A game-local `Scene` state machine:
 
 ```ts
-type GameRequestEvents = {
-  pauseRequested: void;
-  resumeRequested: void;
-  quitRequested: void;
-};
+type Scene = 'playing' | 'paused' | 'menu' | 'gameOver';
 ```
 
-**Step 2 — `IGame` is also an emitter of requests:**
+- `step(context)` branches on the scene:
+  - `playing` — advance the world; on a "pause" action → `scene = 'paused'` and emit `pauseRequested`.
+  - `paused` — route input to the **menu** (up/down/select), never to the world; on "resume" →
+    `scene = 'playing'` and emit `resumeRequested`.
+- `present(context)` branches on the scene:
+  - `playing` — draw the animated world.
+  - `paused` — draw the pause screen (a dimmed, non-animating world + the menu).
+
+This alone meets requirements 1–3 with **zero engine change** — it is purely game logic.
+
+**Part B — the engine owns the cadence.** The game *requests* pause/resume through the event channel
+(§2.4); the engine keeps authority over `paused`, its events, and the clock reset. When `paused`, the
+engine switches from the fixed-timestep loop to a **throttled GUI loop** (§2.5) so it does not burn a
+full 60 fixed steps per second on a static menu.
+
+### 2.4 The request channel (event, option D)
+
+`IGame` is an emitter of request events; the engine subscribes and owns the state (unchanged from the
+earlier event proposal):
 
 ```ts
+type GameRequestEvents = { pauseRequested: void; resumeRequested: void; quitRequested: void };
 interface IGame<F = unknown> extends ISimulationStep, IPresentable<F>, IEventEmitter<GameRequestEvents> {}
 ```
 
-**Step 3 — the game composes an emitter and emits requests from `step`:**
+The game emits `pauseRequested`/`resumeRequested` on scene transitions; the engine maps them to its
+`paused` setter and subscribes in the constructor, unsubscribing on `stop()`.
+
+### 2.5 The throttled paused loop
+
+When `paused`, the engine stops running `advance(now, input)` (no fixed steps, no simulation debt) and
+instead runs a reduced-rate GUI loop that still calls `present` (and one `step` for menu navigation):
 
 ```ts
-class Tetris implements IGame<IFrameBuilder> {
-  readonly #emitter = new EventEmitter<GameRequestEvents>();
-  on  = this.#emitter.on.bind(this.#emitter) as IGame<IFrameBuilder>['on'];
-  off = this.#emitter.off.bind(this.#emitter) as IGame<IFrameBuilder>['off'];
-  emit = this.#emitter.emit.bind(this.#emitter) as IGame<IFrameBuilder>['emit'];
-
-  step(context: ISimulationContext): void {
-    if (context.input.wasPressed(TETRIS_ACTIONS.pause)) this.emit('pauseRequested');
-    // ...
+const loop = (nowNanos: Timestamp) => {
+  const input = this.#sampleInput();
+  if (this.#paused) {
+    // GUI mode: render/navigate at a low rate, never advance the simulation
+    if (nowNanos - this.#lastGuiNanos >= GUI_INTERVAL_NS) {
+      this.#lastGuiNanos = nowNanos;
+      this.#game.step({ clock, dt: 0, metrics, input });   // menu navigation only
+      this.#present?.({ game, alpha: 0, renderer });
+    }
+  } else {
+    this.#simulation.advance(nowNanos, input);
+    this.#present?.({ game, alpha: this.#simulation.clock.pending, renderer });
   }
-}
+  this.#handle = this.#host.schedule(loop);
+};
 ```
 
-**Step 4 — the engine subscribes and keeps authority:**
+Throttling options, cheapest first:
 
-```ts
-// Engine constructor
-game.on('pauseRequested', () => { this.paused = true; });
-game.on('resumeRequested', () => { this.paused = false; });
-game.on('quitRequested', () => { void this.stop(); });
+1. **Frame-skip** — keep the rAF loop but present only every N frames (e.g. every 12 ≈ 5 Hz).
+2. **Timer swap** — cancel rAF on pause and drive a `setTimeout(…, 200)` loop for the GUI, re-entering rAF on resume.
+3. **Dirty-flag** — repaint only when an input event changes the menu selection.
 
-// Engine.stop() must unsubscribe to avoid stale closures
-this.#unsubs.forEach((unsub) => unsub());
-```
+`GUI_INTERVAL_NS` is the "weaker repaint schedule": the pause screen is static, so 5–10 Hz is ample and
+input lag is irrelevant there.
 
-**Naming encodes the split** — the game emits `*Requested` (a request); the engine owns `paused` and
-emits `paused`/`resumed` (the state). The game never touches `paused` directly.
-
-**Trade-offs:**
-
-- ✅ Natural and symmetric — both `IGame` and `IEngine` are emitters; the game stays decoupled from the engine.
-- ✅ Request vs authority is explicit in the naming.
-- ✅ Extensible — `quitRequested`, `restartRequested`, `requestFullscreenRequested` slot in as new events.
-- ⚠️ Requires each game to compose an `EventEmitter` (small boilerplate, same pattern the engine already uses).
-- ⚠️ **Resume asymmetry** — while paused the engine stops calling `step`/`present`, so the game cannot emit
-  `resumeRequested` on its own. To let the game resume, the engine must still sample input (or call a
-  lightweight `step`) while paused; otherwise resume remains a host-side action (`engine.paused = false`).
+**Summary of the split:** the game owns *what is shown and what input does* (its scene); the engine owns
+*how often the loop runs and whether the simulation advances* (its cadence). That is the clean division
+the requirements point at, and it absorbs Option E into the engine's event/authority model rather than
+leaving two disjoint pause states.
 
 ---
 
@@ -160,13 +188,10 @@ emits `paused`/`resumed` (the state). The game never touches `paused` directly.
 **Multi-threading is an `IHost` (host/transport) concern, not a simulation concern.** The simulation
 layer (`ISimulationDriver` + `IGame`) is pure logic — `advance(now, input)` runs `game.step()`
 deterministically — and must be **thread-agnostic**, never spawning threads. The *host* decides where the
-loops run (one thread, a worker, several workers) and how state crosses the boundary. This is the same
-decoupling already applied to time and rendering: the simulation stays pure; the host is the adapter.
-
-The one requirement the host imposes back on the simulation is **portability**: the game state must be
-transferable (structured-clonable or `SharedArrayBuffer`-shared). The engine already satisfies this for
-rendering — `RenderCommand`/`IFrame` are plain serialisable data, so a worker can compute a frame and
-*transfer* it to the main thread.
+loops run (one thread, a worker, several workers) and how state crosses the boundary. The one requirement
+the host imposes back on the simulation is **portability**: the game state must be transferable
+(structured-clonable or `SharedArrayBuffer`-shared). The engine already satisfies this for rendering —
+`RenderCommand`/`IFrame` are plain serialisable data, so a worker can compute a frame and *transfer* it.
 
 ### 3.2 Proposal: multi-threaded `IHost` (web worker)
 
@@ -200,13 +225,72 @@ Identical shape using `worker_threads`: the `Worker` runs the simulation; the ma
 `Atomics` provide shared state when a zero-copy `alpha` is needed. The same `ISimulationDriver`/`IGame`
 run unchanged in both environments — only the host differs.
 
-### 3.4 Other `IHost` implementations
+### 3.4 Alternative `IHost` implementations
 
-| Host | Clock + Scheduler | Use |
-|---|---|---|
-| **`BrowserHostLoop`** *(current)* | `NanoClock` (`performance.now`) + `rAFScheduler` (`requestAnimationFrame`) | the browser demo |
-| **`ManualHostLoop`** | `ManualClock` + `ManualScheduler` | deterministic tests (currently composed ad-hoc, not a named `IHostLoop`) |
-| **`NodeHostLoop`** | `performance.now()` + `setImmediate`/`MessageChannel` | headless/server simulation |
-| **`WorkerHostLoop`** | worker clock + worker `MessageChannel` | multi-threaded simulation (§3.2/§3.3) |
-| **`ReplayHostLoop`** | a recorded `Timestamp[]` replayed in order | deterministic replay / debugging |
-| **`UnlockedHostLoop`** *(retired)* | `performance.now` + `MessageChannel` (no vsync) | run-as-fast-as-possible benchmarks |
+**`ManualHostLoop`** — the deterministic test host, composed from the existing adapters:
+
+```ts
+class ManualHostLoop implements IHostLoop {
+  readonly clock = new ManualClock();
+  readonly scheduler = new ManualScheduler();
+  now(): Timestamp { return this.clock.now(); }
+  schedule(step: (now: Timestamp) => void): IScheduleHandle { return this.scheduler.schedule(step); }
+  cancel(handle: IScheduleHandle): void { this.scheduler.cancel(handle); }
+  /** Drive exactly one frame at the given time. */
+  tick(now: Timestamp): void { this.scheduler.tick(now); }
+  /** Move the clock forward (before a `tick`). */
+  advance(byNanos: Nanoseconds): void { this.clock.advance(byNanos); }
+}
+```
+
+A test drives `advance(frameNanos); tick(clock.now())` in a loop — exactly the deterministic harness the
+engine's tests use. Currently `ManualClock`/`ManualScheduler` are composed ad-hoc; this names the pair.
+
+**`NodeHostLoop`** — headless/server simulation (no rAF in Node):
+
+```ts
+class NodeHostLoop implements IHostLoop {
+  now(): Timestamp { return Math.trunc(performance.now() * 1e6); }
+  schedule(step: (now: Timestamp) => void): IScheduleHandle {
+    const ch = new MessageChannel();
+    ch.port1.onmessage = () => step(this.now());
+    ch.port2.postMessage(null);
+    return { token: ch };
+  }
+  cancel(handle: IScheduleHandle): void {
+    (handle.token as MessageChannel).port1.onmessage = null;
+    (handle.token as MessageChannel).port1.close();
+  }
+}
+```
+
+`MessageChannel` gives sub-millisecond wakeups (no `setTimeout` clamping), so the loop runs "as fast as
+the event loop drains" — the fixed-timestep accumulator keeps the simulation at the configured `fps`.
+Swap `MessageChannel` for `setInterval(…, intervalNanos)` if a throttled cadence is preferred.
+
+**`WorkerHostLoop`** — the multi-threaded host from §3.2/§3.3. It is the same `IHostLoop` shape, but
+`schedule`/`now` run on the worker side while `cancel`/frame handoff cross the `postMessage` boundary. It
+is the point where the engine's simulation portability (§3.1) becomes a live worker.
+
+**`ReplayHostLoop`** — deterministic playback for debugging/replay:
+
+```ts
+class ReplayHostLoop implements IHostLoop {
+  constructor(readonly frames: readonly Timestamp[]) {}
+  #i = 0;
+  now(): Timestamp { return this.frames[this.#i] ?? this.frames.at(-1)!; }
+  schedule(step: (now: Timestamp) => void): IScheduleHandle {
+    step(this.now());
+    this.#i = Math.min(this.#i + 1, this.frames.length - 1);
+    return { token: null };
+  }
+  cancel(_h: IScheduleHandle): void {}
+}
+```
+
+Feeding a recorded `Timestamp[]` reproduces a run bit-for-bit — the same determinism guarantee that makes
+`ManualHostLoop` testable, applied to a captured session.
+
+**`UnlockedHostLoop`** *(retired)* — the old "no vsync, run as fast as possible" host (a `MessageChannel`
+pump like `NodeHostLoop`). It was retired because it adds a second scheduler for no benefit to three 2D
+games; it remains the reference for a benchmark-oriented host.
