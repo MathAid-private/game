@@ -38,6 +38,8 @@ export interface IEngineConfig {
   readonly fps: number;
   /** Number of one-second windows to retain in `IPerformanceMetrics`. */
   readonly fpsHistory?: number;
+  /** Upper bound on simulation catch-up steps run in a single host frame. */
+  readonly maxSteps?: number;
   /** Request browser fullscreen when the engine runs. */
   readonly fullscreen?: boolean;
   /** Fixed logical resolution in device-independent pixels. */

@@ -120,7 +120,7 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
       game,
       config.fps,
       host.now(),
-      MAX_CATCHUP_STEPS,
+      config.maxSteps ?? MAX_CATCHUP_STEPS,
       config.fpsHistory ?? FPS_CACHE_CAPACITY,
     );
   }
