@@ -53,7 +53,7 @@ The redesign follows one rule: **the game describes *what* to draw; an `IRendere
 │  ENGINE CORE  (environment-agnostic — no browser/Node imports)             │
 │  IFrameClock (fixed timestep) · ISimulationDriver · IEngine · IEventSource │
 │  IGame · IFrameBuilder (command list) · IPerformanceMetrics                │
-└────────────┬───────────────────────────────┬───────────────────────────────┘
+└────────────┬────────────────────────────────┬──────────────────────────────┘
              │ implemented by                 │ implemented by
 ┌────────────▼───────────────┐   ┌────────────▼──────────────────────────────┐
 │  INPUT ADAPTERS            │   │  RENDER ADAPTERS  (render modes)          │
