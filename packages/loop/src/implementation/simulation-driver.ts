@@ -12,7 +12,7 @@
  */
 
 import { FPS_CACHE_CAPACITY, MAX_CATCHUP_STEPS, SecondMetric } from '../const';
-import type { IGame, IInputState, ISimulationDriver, Timestamp } from '../types';
+import type { Alpha, IClock, IGame, IInputState, ISimulationDriver, Timestamp } from '../types';
 import { FrameClock } from './frame-clock';
 import { PerformanceMetrics } from './performance';
 
@@ -21,19 +21,21 @@ import { PerformanceMetrics } from './performance';
  *
  * @description
  * `FixedTimestepDriver<G>` integrates each `advance` call's timestamp into its `FrameClock` and
- * then runs `game.step(context)` once per whole step owed, passing the frame's input snapshot
- * into every step. Step count is bounded by `maxSteps` so a long stall cannot spiral into an
- * unbounded catch-up loop; debt beyond the bound is discarded rather than replayed.
+ * then runs `game.step(context)` once per whole step owed, passing the frame's input snapshot and
+ * the fixed `dt` (the step interval) into every step. Step count is bounded by `maxSteps` so a long
+ * stall cannot spiral into an unbounded catch-up loop; debt beyond the bound is discarded rather
+ * than replayed.
  *
- * It reports `clock`, `metrics`, and `game` read-only and never invokes presentation — the caller
- * drives `present` and the renderer separately. This is what keeps simulation cadence
- * independent of display cadence and render mode.
+ * `interpolation()` returns the sub-frame remainder (the accumulator's `pending`), which the engine
+ * uses as the presentation `alpha`. The driver never invokes `present` — the caller drives
+ * presentation separately.
  *
  * @template G - The concrete game type; defaults to `IGame`.
  *
  * @example
  * const driver = new FixedTimestepDriver(tetris, 60, host.now());
  * const steps = driver.advance(host.now(), inputState);
+ * const alpha = driver.interpolation();
  *
  * @see {@link ISimulationDriver}
  * @see {@link FrameClock}
@@ -41,9 +43,11 @@ import { PerformanceMetrics } from './performance';
  */
 export class FixedTimestepDriver<G extends IGame = IGame> implements ISimulationDriver<G> {
   readonly #clock: FrameClock;
+  readonly #timeClock: IClock;
   readonly #metrics: PerformanceMetrics;
   readonly #game: G;
   readonly #maxSteps: number;
+  #lastNow: Timestamp;
 
   /**
    * @summary Construct a driver for a game at a fixed rate.
@@ -64,16 +68,10 @@ export class FixedTimestepDriver<G extends IGame = IGame> implements ISimulation
   ) {
     this.#game = game;
     this.#clock = new FrameClock(SecondMetric.NANOSECONDS / fps, startNanos);
+    this.#lastNow = startNanos;
+    this.#timeClock = { now: () => this.#lastNow };
     this.#metrics = new PerformanceMetrics(historyCapacity);
     this.#maxSteps = maxSteps;
-  }
-
-  /**
-   * @summary Read-only timing state.
-   * @author MathAid
-   */
-  get clock(): FrameClock {
-    return this.#clock;
   }
 
   /**
@@ -93,11 +91,27 @@ export class FixedTimestepDriver<G extends IGame = IGame> implements ISimulation
   }
 
   /**
-   * @summary Whether at least one whole step is owed.
+   * @summary The sub-frame interpolation factor in `[0, 1)`.
+   *
+   * @description
+   * Returns the accumulator's `pending` remainder after whole steps are consumed — the fraction of
+   * the next fixed step that has elapsed.
+   *
+   * @return The interpolation `alpha`.
    * @author MathAid
    */
-  get canStep(): boolean {
-    return this.#clock.pending >= 1;
+  interpolation(): Alpha {
+    return this.#clock.pending;
+  }
+
+  /**
+   * @summary Discard accumulated debt and re-anchor the accumulator.
+   * @param nowNanos - The timestamp to re-anchor against, in nanoseconds.
+   * @author MathAid
+   */
+  reset(nowNanos: Timestamp): void {
+    this.#lastNow = nowNanos;
+    this.#clock.reset(nowNanos);
   }
 
   /**
@@ -108,11 +122,17 @@ export class FixedTimestepDriver<G extends IGame = IGame> implements ISimulation
    * @author MathAid
    */
   advance(nowNanos: Timestamp, input: IInputState): number {
+    this.#lastNow = nowNanos;
     this.#clock.advance(nowNanos);
 
     let steps = 0;
     while (this.#clock.pending >= 1 && steps < this.#maxSteps) {
-      this.#game.step({ clock: this.#clock, metrics: this.#metrics, input });
+      this.#game.step({
+        clock: this.#timeClock,
+        dt: this.#clock.stepInterval,
+        metrics: this.#metrics,
+        input,
+      });
       this.#clock.consume();
       steps++;
     }

@@ -16,6 +16,7 @@
  * @author MathAid
  */
 
+import type { IClock, Nanoseconds } from './clock.type';
 import type { IInputState } from './input.type';
 
 /**
@@ -129,8 +130,10 @@ export interface IPerformanceMetrics {
  * @author MathAid
  */
 export interface ISimulationContext {
-  /** Timing state for this step. */
-  readonly clock: IFrameClock;
+  /** The time source (monotonic `now()`). */
+  readonly clock: IClock;
+  /** Elapsed time for this step, in nanoseconds. */
+  readonly dt: Nanoseconds;
   /** Read-only performance metrics. */
   readonly metrics: IPerformanceMetrics;
   /** The logical input snapshot for this frame. */
@@ -262,8 +265,6 @@ export interface IGame<F = unknown> extends ISimulationStep, IPresentable<F> {}
  * @author MathAid
  */
 export interface ISimulationDriver<G extends IGame = IGame> {
-  /** Read-only timing state. */
-  readonly clock: IFrameClock;
   /** Read-only performance metrics. */
   readonly metrics: IPerformanceMetrics;
   /** The game being driven. */
@@ -276,8 +277,17 @@ export interface ISimulationDriver<G extends IGame = IGame> {
    * @author MathAid
    */
   advance(now: number, input: IInputState): number;
-  /** Whether at least one whole step is owed. */
-  readonly canStep: boolean;
+  /**
+   * @summary The sub-frame interpolation factor in `[0, 1)` for presentation.
+   * @author MathAid
+   */
+  interpolation(): Alpha;
+  /**
+   * @summary Discard accumulated debt and re-anchor to a fresh timestamp.
+   * @param now - The timestamp to re-anchor against, in nanoseconds.
+   * @author MathAid
+   */
+  reset(now: number): void;
 }
 
 /**

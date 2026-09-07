@@ -19,6 +19,7 @@ import { FPS_CACHE_CAPACITY, MAX_CATCHUP_STEPS } from '../const';
 import type {
   Alpha,
   EngineEvents,
+  IClock,
   IEngine,
   IEngineConfig,
   IGame,
@@ -26,6 +27,7 @@ import type {
   IInputSource,
   IInputState,
   IScheduleHandle,
+  ISimulationDriver,
   Timestamp,
 } from '../types';
 import { EventEmitter } from './event-emitter';
@@ -92,7 +94,7 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
   readonly #config: IEngineConfig;
   readonly #game: G;
   readonly #host: IHostLoop;
-  readonly #simulation: FixedTimestepDriver<G>;
+  readonly #simulation: ISimulationDriver<G>;
   readonly #present: PresentFrame<G, R> | null;
   readonly #inputs = new Map<string, IInputSource>();
   #renderer: R | null = null;
@@ -104,25 +106,35 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
   emit = this.#emitter.emit.bind(this.#emitter) as IEngine<G, R>['emit'];
 
   /**
-   * @summary Construct an engine over a game, configuration, and host loop.
+   * @summary Construct an engine over a game, configuration, host loop, and simulation driver.
    * @param game - The game to drive.
    * @param config - Static engine configuration.
    * @param host - The clock + scheduler the loop runs on.
    * @param present - Optional render glue called once per frame; omit for headless use.
+   * @param simulation - Optional simulation driver. Defaults to a `FixedTimestepDriver` at
+   *   `config.fps`.
    * @author MathAid
    */
-  constructor(game: G, config: IEngineConfig, host: IHostLoop, present?: PresentFrame<G, R>) {
+  constructor(
+    game: G,
+    config: IEngineConfig,
+    host: IHostLoop,
+    present?: PresentFrame<G, R>,
+    simulation?: ISimulationDriver<G>,
+  ) {
     this.#game = game;
     this.#config = config;
     this.#host = host;
     this.#present = present ?? null;
-    this.#simulation = new FixedTimestepDriver(
-      game,
-      config.fps,
-      host.now(),
-      config.maxSteps ?? MAX_CATCHUP_STEPS,
-      config.fpsHistory ?? FPS_CACHE_CAPACITY,
-    );
+    this.#simulation =
+      simulation ??
+      new FixedTimestepDriver(
+        game,
+        config.fps,
+        host.now(),
+        config.maxSteps ?? MAX_CATCHUP_STEPS,
+        config.fpsHistory ?? FPS_CACHE_CAPACITY,
+      );
   }
 
   /**
@@ -142,11 +154,11 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
   }
 
   /**
-   * @summary Read-only timing view (pending steps, step interval).
+   * @summary The time source (monotonic `now()`).
    * @author MathAid
    */
-  get clock() {
-    return this.#simulation.clock;
+  get clock(): IClock {
+    return this.#host;
   }
 
   /**
@@ -176,7 +188,7 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
       this.#paused = true;
       this.#emitter.emit('paused');
     } else {
-      this.#simulation.clock.reset(this.#host.now());
+      this.#simulation.reset(this.#host.now());
       this.#paused = false;
       this.#emitter.emit('resumed');
     }
@@ -229,7 +241,7 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
         this.#simulation.advance(nowNanos, input);
         this.#present?.({
           game: this.#game,
-          alpha: this.#simulation.clock.pending,
+          alpha: this.#simulation.interpolation(),
           renderer: this.#renderer,
         });
       }

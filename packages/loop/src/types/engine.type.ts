@@ -15,9 +15,10 @@
  * @author MathAid
  */
 
+import type { IClock } from './clock.type';
 import type { IEventEmitter } from './event.type';
 import type { IInputSource } from './input.type';
-import type { IFrameClock, IGame, IPerformanceMetrics } from './simulation.type';
+import type { IGame, IPerformanceMetrics } from './simulation.type';
 
 /**
  * @summary Static, serialisable configuration for an engine instance.
@@ -109,8 +110,8 @@ export interface IEngine<G extends IGame = IGame, R = unknown> extends IEventEmi
   readonly configuration: IEngineConfig;
   /** The game this engine drives. */
   readonly game: G;
-  /** Read-only timing view (pending steps, step interval). */
-  readonly clock: IFrameClock;
+  /** The time source (monotonic `now()`). */
+  readonly clock: IClock;
   /** Read-only performance metrics. */
   readonly metrics: IPerformanceMetrics;
   /** Whether the loop is currently paused. */
