@@ -53,6 +53,91 @@ export const TETRIS_ACTIONS = {
 } as const;
 
 /**
+ * @summary Clamp a value to the closed interval `[0, 1]`.
+ * @param value - The value to clamp.
+ * @return `value` bounded to `[0, 1]`.
+ * @author MathAid
+ */
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
+/**
+ * @summary The scoring result of one clear: points, combo delta, and deluxe points.
+ * @author MathAid
+ */
+export interface ClearScore {
+  /** Points to add to the total score. */
+  readonly points: number;
+  /** Combo-meter delta to add (before clamping). */
+  readonly combo: number;
+  /** Points attributed to the cascade ("deluxe") stacking bonus. */
+  readonly deluxe: number;
+}
+
+/**
+ * @summary Score a clear under the four cumulative Tetris rules.
+ *
+ * @description
+ * The rules stack in one lock:
+ * - **Line cleared** — `+1` point per line, `+0.05` combo.
+ * - **Multi-line lock** — `+1` stacking on the base (so `L` lines → `L + 1`), `+0.25` combo.
+ * - **Full clean** — `3+` lines on an emptied board → `×2` base (`L × 2`), `+0.75` combo.
+ * - **Deluxe (cascade)** — each successive cascade wave adds an incrementing stacking bonus
+ *   (`+1`, `+2`, `+3`, …) and `+0.25` combo; the bonuses are summed into `deluxe`.
+ *
+ * @param lines - Total lines cleared (including cascade waves).
+ * @param cascadeWaves - Number of cascade waves beyond the initial clear (`0` for a plain clear).
+ * @param fullClean - Whether the board is empty after the clear with `3+` lines.
+ * @return The points, combo delta, and deluxe bonus.
+ * @author MathAid
+ */
+export function scoreClear(lines: number, cascadeWaves: number, fullClean: boolean): ClearScore {
+  let points = lines; // base: +1 per line
+  let combo = 0;
+  let deluxe = 0;
+
+  if (fullClean) {
+    points = lines * 2;
+    combo += 0.75;
+  } else if (lines >= 2) {
+    points = lines + 1;
+    combo += 0.25;
+  } else {
+    combo += 0.05;
+  }
+
+  for (let wave = 1; wave <= cascadeWaves; wave++) {
+    deluxe += wave;
+    combo += 0.25;
+  }
+  points += deluxe;
+
+  return { points, combo, deluxe };
+}
+
+/**
+ * @summary A read-only snapshot of Tetris scoring and progress metrics.
+ * @author MathAid
+ */
+export interface TetrisMetrics {
+  /** Deluxe (cascade) points earned so far this session. */
+  readonly deluxePoints: number;
+  /** All-time high deluxe points this session. */
+  readonly deluxeHigh: number;
+  /** Total points this session. */
+  readonly totalPoints: number;
+  /** All-time high total points this session. */
+  readonly totalHigh: number;
+  /** The combo meter, clamped to `[0, 1]`. */
+  readonly combo: number;
+  /** Number of full-board clears (full cleans) this session. */
+  readonly boardClears: number;
+  /** All-time high board-clear count this session. */
+  readonly boardClearsHigh: number;
+}
+
+/**
  * @summary A seven-bag randomiser: each of the seven pieces appears once per shuffle.
  *
  * @description
@@ -126,9 +211,15 @@ export class Tetris implements IStatefulGame<IFrameBuilder> {
   #next: ActivePiece;
   #stepCounter = 0;
   #linesCleared = 0;
+  #score = 0;
+  #combo = 0;
+  #deluxePoints = 0;
+  #boardClears = 0;
+  #highScore = 0;
+  #highDeluxe = 0;
+  #highClears = 0;
 
   #paused: boolean;
-  // #score: number;
 
   /**
    * @summary Construct a Tetris game.
@@ -155,6 +246,22 @@ export class Tetris implements IStatefulGame<IFrameBuilder> {
   }
 
   /**
+   * @summary A read-only snapshot of scoring and progress metrics.
+   * @author MathAid
+   */
+  get metrics(): TetrisMetrics {
+    return {
+      deluxePoints: this.#deluxePoints,
+      deluxeHigh: this.#highDeluxe,
+      totalPoints: this.#score,
+      totalHigh: this.#highScore,
+      combo: this.#combo,
+      boardClears: this.#boardClears,
+      boardClearsHigh: this.#highClears,
+    };
+  }
+
+  /**
    * @summary Advance the game by one fixed step.
    * @param context - Timing, metrics, and the frame's logical input.
    * @author MathAid
@@ -174,6 +281,7 @@ export class Tetris implements IStatefulGame<IFrameBuilder> {
         : this.#gravitySteps;
       if (this.#stepCounter >= interval) {
         this.#stepCounter = 0;
+        this.#combo = clamp01(this.#combo - 0.001);
         this.#fall();
       }
     }
@@ -336,7 +444,8 @@ export class Tetris implements IStatefulGame<IFrameBuilder> {
       for (const row of this.#board) row.fill(null);
       this.#linesCleared = 0;
     } else {
-      this.#clearLines();
+      const lines = this.#clearLines();
+      if (lines > 0) this.#applyScore(lines);
     }
 
     this.#current = this.#next;
@@ -344,17 +453,49 @@ export class Tetris implements IStatefulGame<IFrameBuilder> {
   }
 
   /**
-   * @summary Remove completed rows, shifting everything above them down.
+   * @summary Apply the four cumulative scoring rules to a clear and update the combo meter.
+   * @param lines - Total lines cleared this lock.
    * @author MathAid
    */
-  #clearLines(): void {
+  #applyScore(lines: number): void {
+    const fullClean = lines >= 3 && this.#isEmptyBoard();
+    const { points, combo, deluxe } = scoreClear(lines, 0, fullClean);
+
+    this.#score += points;
+    this.#combo = clamp01(this.#combo + combo);
+    this.#deluxePoints += deluxe;
+    if (fullClean) this.#boardClears++;
+
+    this.#highScore = Math.max(this.#highScore, this.#score);
+    this.#highDeluxe = Math.max(this.#highDeluxe, this.#deluxePoints);
+    this.#highClears = Math.max(this.#highClears, this.#boardClears);
+  }
+
+  /**
+   * @summary Whether every board cell is empty.
+   * @return `true` when the board holds no locked cells.
+   * @author MathAid
+   */
+  #isEmptyBoard(): boolean {
+    return this.#board.every((row) => row.every((cell) => cell === null));
+  }
+
+  /**
+   * @summary Remove completed rows, shifting everything above them down.
+   * @return The number of rows cleared.
+   * @author MathAid
+   */
+  #clearLines(): number {
+    let lines = 0;
     for (let row = ROWS - 1; row >= 0; row--) {
       if (this.#board[row].every((cell) => cell !== null)) {
         this.#board.splice(row, 1);
         this.#board.unshift(new Array<Color | null>(COLS).fill(null));
         this.#linesCleared++;
+        lines++;
         row++;
       }
     }
+    return lines;
   }
 }

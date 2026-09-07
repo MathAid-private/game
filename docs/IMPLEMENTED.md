@@ -183,3 +183,8 @@ Landed on the transient `dev` branch (see `PROPOSALS.md` for the step-by-step pl
   'transitioning' | 'gameOver'`) and `IStatefulGame<F>` (an `IGame` plus a read-only `scene` and an
   optional recursive `transition`). `Tetris`, `Snake`, and `SpaceInvaders` now implement
   `IStatefulGame<IFrameBuilder>` and report their `scene`.
+- **Tetris scoring + combo + metrics (§9.1–9.3)** — a pure, tested `scoreClear` in `tetris.ts`
+  implements the four cumulative rules (single `+1`/`+0.05`, multi-line `L+1`/`+0.25`, full clean
+  `L×2`/`+0.75`, deluxe cascade `+1,+2,…`/`+0.25` each). `Tetris` tracks score, a `[0,1]` combo
+  meter (adds on clears, `−0.001` per fall tick, clamped), deluxe points, board-clear count, and
+  their in-session highs, exposed via a read-only `metrics` getter.
