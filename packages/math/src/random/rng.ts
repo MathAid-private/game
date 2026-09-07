@@ -33,28 +33,29 @@ import { ones } from "../bitwise/words";
  * @author MathAid
  */
 export namespace PCG {
-  // ---------------------------------------------------------------------------
-  // Supported bit widths. PCG's internal state must be DOUBLE the output width
-  // because the LCG needs headroom — the high bits of the state are used to
-  // permute the low bits, so you need more state than you output.
-  // e.g. 32-bit output → 64-bit state, 64-bit output → 128-bit state, etc.
-  // ---------------------------------------------------------------------------
+  /**
+   * @summary The supported PCG output bit widths.
+   *
+   * @description
+   * Each supported width pairs with an internal LCG state of double that width, because the LCG needs
+   * headroom: the high bits of the state permute the low bits. For example, 32-bit output uses a
+   * 64-bit state, 64-bit output a 128-bit state, and so on.
+   *
+   * @author MathAid
+   */
   type BitLength = 8 | 16 | 24 | 32 | 64 | 128 | 256;
 
-  // ---------------------------------------------------------------------------
-  // PCG constants — each output width needs its own multiplier and increment.
-  //
-  // The multiplier must satisfy:
-  //   - odd (so it is coprime to 2^n, guaranteeing full LCG period)
-  //   - good "avalanche" — high bits affect low bits quickly
-  //
-  // The increment must be odd (same coprimality reason). It can be anything odd;
-  // think of it as selecting which of the 2^(n-1) independent PCG streams you
-  // are on. We hardcode one good increment per width for simplicity.
-  //
-  // These specific constants come from the PCG reference implementation and
-  // L'Ecuyer's tables of good LCG multipliers.
-  // ---------------------------------------------------------------------------
+  /**
+   * @summary The per-width PCG constants — multiplier, increment, and state width.
+   *
+   * @description
+   * Each output width needs its own multiplier and increment. The multiplier must be odd (coprime to
+   * `2^n`, guaranteeing a full LCG period) with good avalanche; the increment must also be odd, and
+   * acts as the selector of which of the `2^(n-1)` independent PCG streams is used. The constants come
+   * from the PCG reference implementation and L'Ecuyer's tables of good LCG multipliers.
+   *
+   * @author MathAid
+   */
   const PCG_PARAMS: Record<BitLength, { mul: bigint; inc: bigint; stateBits: number }> = {
     //         mul                        inc                        stateBits
     //         (must be odd)              (must be odd)              (2× output)
@@ -67,20 +68,22 @@ export namespace PCG {
     256: { mul: 0x2360ed051fc65da44385df649fccf645n, inc: 0x5851f42d4c957f2dn, stateBits: 512 },
   };
 
-  // ---------------------------------------------------------------------------
-  // PCG output permutation — "XSH-RR" (XorShift High bits, then Rotate Right).
-  //
-  // This is the standard PCG-XSH-RR permutation. It works by:
-  //   1. XOR the state with itself shifted right by half the state width.
-  //      This folds high entropy (high bits of LCG are better) into the value.
-  //   2. Rotate right by the top bits of the state.
-  //      The rotation amount itself comes from the high bits, which are the
-  //      most random part of the LCG — using them as a rotation selector
-  //      breaks any visible periodicity in the output.
-  //
-  // `stateBits`  — width of the full LCG state (2× output)
-  // `outputBits` — width we want to return
-  // ---------------------------------------------------------------------------
+  /**
+   * @summary The PCG "XSH-RR" output permutation (XorShift-High, then Rotate-Right).
+   *
+   * @description
+   * `xshRR` maps a `stateBits`-wide LCG state to an `outputBits`-wide value. It XORs the state with
+   * itself shifted right to fold the high-entropy top half into the low half, truncates to the output
+   * width, then rotates right by an amount taken from the very top bits of the state — the most
+   * random part of an LCG, so using them as a rotation selector breaks visible periodicity.
+   *
+   * @param state - The full LCG state (a `stateBits`-wide value).
+   * @param stateBits - The width of `state` (twice the output width).
+   * @param outputBits - The desired output width.
+   * @return The permuted output, masked to `outputBits`.
+   *
+   * @author MathAid
+   */
   function xshRR(state: bigint, stateBits: number, outputBits: number): bigint {
     const stateBitsB = BigInt(stateBits);
     const outputBitsB = BigInt(outputBits);
@@ -107,25 +110,42 @@ export namespace PCG {
     return ((truncated >> r) | (truncated << (outputBitsB - r))) & outputMask;
   }
 
-  // ---------------------------------------------------------------------------
-  // LCG advance — the heart of the state machine.
-  //
-  // Standard LCG recurrence:  state = state * mul + inc  (mod 2^stateBits)
-  //
-  // The modular reduction is achieved by ANDing with stateMask rather than
-  // using the % operator — AND is cheaper and equivalent for power-of-two moduli.
-  // ---------------------------------------------------------------------------
+  /**
+   * @summary Advance a Linear Congruential Generator state by one step.
+   *
+   * @description
+   * `lcgAdvance` computes `state = state * mul + inc (mod 2^stateBits)`. The modular reduction is done
+   * by ANDing with `stateMask` rather than `%`, which is cheaper and equivalent for power-of-two
+   * moduli.
+   *
+   * @param state - The current state.
+   * @param mul - The LCG multiplier (odd).
+   * @param inc - The LCG increment (odd).
+   * @param stateMask - The power-of-two mask for the state width.
+   * @return The next state.
+   *
+   * @author MathAid
+   */
   function lcgAdvance(state: bigint, mul: bigint, inc: bigint, stateMask: bigint): bigint {
     return (state * mul + inc) & stateMask;
   }
 
-  // ---------------------------------------------------------------------------
-  // Seed initialisation — we don't use the seed directly as the initial state.
-  //
-  // Reason: a seed of 0 would give a degenerate LCG start. The standard PCG
-  // init is to run one extra LCG step after adding the increment to the seed.
-  // This ensures even seed=0 starts in a non-trivial state.
-  // ---------------------------------------------------------------------------
+  /**
+   * @summary Initialise a PCG state from a seed without degeneracy.
+   *
+   * @description
+   * `initState` warms up the LCG from zero, mixes the seed into the running state, and runs one more
+   * LCG step, so even `seed = 0` starts from a non-trivial position rather than the degenerate zero
+   * state.
+   *
+   * @param seed - The caller's seed (any `bigint`).
+   * @param inc - The LCG increment.
+   * @param mul - The LCG multiplier.
+   * @param stateMask - The power-of-two mask for the state width.
+   * @return The initialised state.
+   *
+   * @author MathAid
+   */
   function initState(seed: bigint, inc: bigint, mul: bigint, stateMask: bigint): bigint {
     // Start from zero, apply one LCG step to "warm up" with the increment
     let state = lcgAdvance(0n, mul, inc, stateMask);
@@ -136,16 +156,26 @@ export namespace PCG {
     return state;
   }
 
-  // ---------------------------------------------------------------------------
-  // The generator factory.
-  //
-  // Returns a generator function that, given the same seed + bits, always
-  // produces the same sequence. Each call to the returned function advances
-  // the LCG and emits the next permuted output.
-  //
-  // `seed`    — any bigint; determines which point in the sequence we start
-  // `bits`    — output bit width; must be one of the supported BitLength values
-  // ---------------------------------------------------------------------------
+  /**
+   * @summary Create a PCG generator producing `bits`-wide `bigint` outputs.
+   *
+   * @description
+   * `pcg` returns a closure that, given the same seed and bit width, always reproduces the same
+   * sequence. Each call advances the internal LCG and returns the next XSH-RR-permuted output, masked
+   * to `bits` bits.
+   *
+   * @param seed - Any `bigint`; determines the starting point in the sequence.
+   * @param bits - The output width; one of `8 | 16 | 24 | 32 | 64 | 128 | 256`.
+   * @return A generator producing successive `bits`-wide `bigint` values.
+   *
+   * @throws {Error} If `bits` is not one of the supported widths.
+   *
+   * @example
+   * const rng = PCG.pcg(1n, 32);
+   * const roll = rng(); // 32-bit bigint
+   *
+   * @author MathAid
+   */
   export function pcg(seed: bigint, bits: BitLength): () => bigint {
     const params = PCG_PARAMS[bits];
 
@@ -173,11 +203,6 @@ export namespace PCG {
     };
   }
 }
-
-// ---------------------------------------------------------------------------
-// Shared helpers for the 64-bit generators below. All arithmetic is `bigint`,
-// masked to 64 bits, so the low-level word operations are exact.
-// ---------------------------------------------------------------------------
 
 /** `2^32` — scales a 32-bit integer to `[0, 1)`. */
 const UINT32_SCALE = 4294967296;
@@ -235,7 +260,6 @@ function splitmix64(seed: bigint): () => bigint {
   };
 }
 
-// ---------------------------------------------------------------------------
 /**
  * @summary Mulberry32 — a small, fast 32-bit PRNG family (by Tommy Ettinger).
  *
@@ -327,7 +351,6 @@ export namespace Mulberry {
   }
 }
 
-// ---------------------------------------------------------------------------
 /**
  * @summary Xoshiro256** — a 256-bit state, 64-bit output generator (Blackman & Vigna).
  *
@@ -380,7 +403,6 @@ export namespace Xoshiro {
   }
 }
 
-// ---------------------------------------------------------------------------
 /**
  * @summary SFC64 — a Small Fast Chaotic 64-bit generator (Chris Doty-Humphrey).
  *
@@ -429,7 +451,6 @@ export namespace SFC64 {
   }
 }
 
-// ---------------------------------------------------------------------------
 /**
  * @summary Wyrand — the 64-bit generator from wyhash (Wang Yi).
  *
@@ -474,7 +495,6 @@ export namespace Wyrand {
   }
 }
 
-// ---------------------------------------------------------------------------
 /**
  * @summary Squares — a counter-based 64-bit generator (Bernard Widynski).
  *
