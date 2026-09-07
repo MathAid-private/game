@@ -14,6 +14,7 @@
 import { FPS_CACHE_CAPACITY, MAX_CATCHUP_STEPS, SecondMetric } from '../const';
 import type {
   Alpha,
+  IAudioSink,
   IClock,
   IGame,
   IInputState,
@@ -23,6 +24,7 @@ import type {
   StepSignal,
   Timestamp,
 } from '../types';
+import { NoopAudioSink } from '../audio/noop-audio-sink';
 import { FrameClock } from './frame-clock';
 import { PerformanceMetrics } from './performance';
 
@@ -57,6 +59,7 @@ export class FixedTimestepDriver<G extends IGame = IGame> implements ISimulation
   readonly #metrics: PerformanceMetrics;
   readonly #game: G;
   readonly #maxSteps: number;
+  #audio: IAudioSink = NoopAudioSink.INSTANCE;
   #lastNow: Timestamp;
 
   /**
@@ -141,6 +144,15 @@ export class FixedTimestepDriver<G extends IGame = IGame> implements ISimulation
   }
 
   /**
+   * @summary Bind the audio sink supplied to each step's context.
+   * @param sink - The sink game sound requests are forwarded to.
+   * @author MathAid
+   */
+  setAudio(sink: IAudioSink): void {
+    this.#audio = sink;
+  }
+
+  /**
    * @summary Advance the simulation by a wall-clock sample.
    * @param nowNanos - Current monotonic timestamp, in nanoseconds.
    * @param input - The input snapshot for this frame; shared by every step run.
@@ -159,6 +171,7 @@ export class FixedTimestepDriver<G extends IGame = IGame> implements ISimulation
         dt: this.#clock.stepInterval,
         metrics: this.#metrics,
         input,
+        audio: this.#audio,
       });
       this.#clock.consume();
       steps++;

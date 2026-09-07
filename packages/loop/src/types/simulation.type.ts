@@ -17,6 +17,7 @@
  */
 
 import type { IClock, Nanoseconds } from './clock.type';
+import type { IAudioSink } from './audio.type';
 import type { IInputState } from './input.type';
 
 /**
@@ -218,6 +219,8 @@ export interface ISimulationContext {
   readonly metrics: IPerformanceMetrics;
   /** The logical input snapshot for this frame. */
   readonly input: IInputState;
+  /** The audio sink for declarative sound requests (a no-op when none is bound). */
+  readonly audio: IAudioSink;
 }
 
 /**
@@ -384,6 +387,12 @@ export interface ISimulationDriver<G extends IGame = IGame> {
    * @author MathAid
    */
   reset(now: number): void;
+  /**
+   * @summary Bind the audio sink supplied to each step's context.
+   * @param sink - The sink game sound requests are forwarded to.
+   * @author MathAid
+   */
+  setAudio(sink: IAudioSink): void;
 }
 
 /**

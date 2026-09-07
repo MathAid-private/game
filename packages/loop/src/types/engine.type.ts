@@ -17,6 +17,7 @@
 
 import type { IClock } from './clock.type';
 import type { IEventEmitter } from './event.type';
+import type { IAudioSink } from './audio.type';
 import type { IInputSource } from './input.type';
 import type { IGame, IPerformanceMetrics, LiveMetrics } from './simulation.type';
 
@@ -76,6 +77,8 @@ export type EngineEvents<R = unknown> = {
   readonly inputDetached: { readonly id: string };
   /** The active render mode changed. */
   readonly rendererChanged: { readonly renderer: R };
+  /** The audio sink changed. */
+  readonly audioChanged: { readonly sink: IAudioSink };
   /** A per-frame snapshot of live metrics (FPS/alpha/dt/elapsed). */
   readonly metrics: LiveMetrics;
 };
@@ -142,6 +145,12 @@ export interface IEngine<G extends IGame = IGame, R = unknown> extends IEventEmi
    * @author MathAid
    */
   setRenderer(renderer: R): void;
+  /**
+   * @summary Set the active audio sink.
+   * @param sink - The sink game sound requests are forwarded to.
+   * @author MathAid
+   */
+  setAudio(sink: IAudioSink): void;
   /**
    * @summary Start the loop.
    * @return Resolves once the first frame is scheduled (not when the engine stops).

@@ -166,3 +166,10 @@ Landed on the transient `dev` branch (see `PROPOSALS.md` for the step-by-step pl
   `host/node-host-loop.ts` (`NodeHostLoop`, `IHostLoop<MessageChannel>`), `host/replay-host-loop.ts`
   (`ReplayHostLoop`, `IHostLoop<number>`, synchronous `Timestamp[]` playback), and
   `host/worker-host-loop.ts` (`WorkerHostLoop`, a worker-oriented alias of `NodeHostLoop`).
+- **Audio (§5.2)** — `IAudioSink` contract (`play`/`stop`/`setVolume`) in `types/audio.type.ts`;
+  `NoopAudioSink`, `RecordingAudioSink`, and `WebAudioSink` (Web Audio API) in `src/audio/`.
+  `ISimulationContext.audio` threads the sink to games declaratively; `ISimulationDriver.setAudio`
+  and `IEngine.setAudio` bind it (with an `audioChanged` event).
+- **Visual sprites (§5.3)** — `ISpriteRegistry` + `SpriteRegistry` (PNG/JPEG/GIF/WebP decoding) in
+  `render/sprite-registry.ts`; `Canvas2DRenderer.setSprites` resolves `{ kind: 'sprite' }` through
+  the registry and `drawImage`s it (magenta placeholder when unbound/unloaded).

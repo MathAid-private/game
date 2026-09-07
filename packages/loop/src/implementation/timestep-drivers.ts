@@ -15,6 +15,7 @@
 import { FPS_CACHE_CAPACITY } from '../const';
 import type {
   Alpha,
+  IAudioSink,
   IClock,
   IGame,
   IInputState,
@@ -23,6 +24,7 @@ import type {
   StepResult,
   Timestamp,
 } from '../types';
+import { NoopAudioSink } from '../audio/noop-audio-sink';
 import { PerformanceMetrics } from './performance';
 
 /**
@@ -49,6 +51,7 @@ export class VariableTimestepDriver<G extends IGame = IGame> implements ISimulat
   readonly #timeClock: IClock;
   #lastNow: Timestamp;
   #lastDt = 0;
+  #audio: IAudioSink = NoopAudioSink.INSTANCE;
 
   /**
    * @summary Construct a variable-timestep driver.
@@ -115,6 +118,15 @@ export class VariableTimestepDriver<G extends IGame = IGame> implements ISimulat
   }
 
   /**
+   * @summary Bind the audio sink supplied to each step's context.
+   * @param sink - The sink game sound requests are forwarded to.
+   * @author MathAid
+   */
+  setAudio(sink: IAudioSink): void {
+    this.#audio = sink;
+  }
+
+  /**
    * @summary Advance the simulation by one real-time frame.
    * @param nowNanos - Current monotonic timestamp, in nanoseconds.
    * @param input - The input snapshot for this frame.
@@ -125,7 +137,13 @@ export class VariableTimestepDriver<G extends IGame = IGame> implements ISimulat
     const dt = nowNanos - this.#lastNow;
     this.#lastNow = nowNanos;
     this.#lastDt = dt;
-    const signal = this.#game.step({ clock: this.#timeClock, dt, metrics: this.#metrics, input });
+    const signal = this.#game.step({
+      clock: this.#timeClock,
+      dt,
+      metrics: this.#metrics,
+      input,
+      audio: this.#audio,
+    });
     this.#metrics.record(1, nowNanos);
     return { steps: 1, signal: signal ?? 'continue' };
   }
@@ -156,6 +174,7 @@ export class CappedVariableTimestepDriver<G extends IGame = IGame>
   readonly #maxDt: number;
   #lastNow: Timestamp;
   #lastDt = 0;
+  #audio: IAudioSink = NoopAudioSink.INSTANCE;
 
   /**
    * @summary Construct a capped-variable-timestep driver.
@@ -229,6 +248,15 @@ export class CappedVariableTimestepDriver<G extends IGame = IGame>
   }
 
   /**
+   * @summary Bind the audio sink supplied to each step's context.
+   * @param sink - The sink game sound requests are forwarded to.
+   * @author MathAid
+   */
+  setAudio(sink: IAudioSink): void {
+    this.#audio = sink;
+  }
+
+  /**
    * @summary Advance the simulation by one frame, with `dt` clamped to `maxDt`.
    * @param nowNanos - Current monotonic timestamp, in nanoseconds.
    * @param input - The input snapshot for this frame.
@@ -240,7 +268,13 @@ export class CappedVariableTimestepDriver<G extends IGame = IGame>
     if (dt > this.#maxDt) dt = this.#maxDt;
     this.#lastNow = nowNanos;
     this.#lastDt = dt;
-    const signal = this.#game.step({ clock: this.#timeClock, dt, metrics: this.#metrics, input });
+    const signal = this.#game.step({
+      clock: this.#timeClock,
+      dt,
+      metrics: this.#metrics,
+      input,
+      audio: this.#audio,
+    });
     this.#metrics.record(1, nowNanos);
     return { steps: 1, signal: signal ?? 'continue' };
   }
@@ -269,6 +303,7 @@ export class EventDrivenDriver<G extends IGame = IGame> implements ISimulationDr
   readonly #game: G;
   readonly #timeClock: IClock;
   #lastNow: Timestamp;
+  #audio: IAudioSink = NoopAudioSink.INSTANCE;
 
   /**
    * @summary Construct an event-driven driver.
@@ -335,6 +370,15 @@ export class EventDrivenDriver<G extends IGame = IGame> implements ISimulationDr
   }
 
   /**
+   * @summary Bind the audio sink supplied to each step's context.
+   * @param sink - The sink game sound requests are forwarded to.
+   * @author MathAid
+   */
+  setAudio(sink: IAudioSink): void {
+    this.#audio = sink;
+  }
+
+  /**
    * @summary A time-driven no-op — re-anchors the clock and runs zero steps.
    * @param nowNanos - Current monotonic timestamp, in nanoseconds.
    * @param input - The input snapshot (unused — no step runs).
@@ -354,7 +398,13 @@ export class EventDrivenDriver<G extends IGame = IGame> implements ISimulationDr
    * @author MathAid
    */
   step(input: IInputState): StepResult {
-    const signal = this.#game.step({ clock: this.#timeClock, dt: 0, metrics: this.#metrics, input });
+    const signal = this.#game.step({
+      clock: this.#timeClock,
+      dt: 0,
+      metrics: this.#metrics,
+      input,
+      audio: this.#audio,
+    });
     this.#metrics.record(1, this.#lastNow);
     return { steps: 1, signal: signal ?? 'continue' };
   }

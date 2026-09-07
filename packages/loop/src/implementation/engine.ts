@@ -19,6 +19,7 @@ import { FPS_CACHE_CAPACITY, GUI_INTERVAL_NS, MAX_CATCHUP_STEPS } from '../const
 import type {
   Alpha,
   EngineEvents,
+  IAudioSink,
   IClock,
   IEngine,
   IEngineConfig,
@@ -34,6 +35,7 @@ import type {
   StepSignal,
   Timestamp,
 } from '../types';
+import { NoopAudioSink } from '../audio/noop-audio-sink';
 import { EventEmitter } from './event-emitter';
 import { CompositeInputState, NullInputState } from './input';
 import { FixedTimestepDriver } from './simulation-driver';
@@ -103,6 +105,7 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
   readonly #present: PresentFrame<G, R> | null;
   readonly #inputs = new Map<string, IInputSource>();
   #renderer: R | null = null;
+  #audio: IAudioSink = NoopAudioSink.INSTANCE;
   #paused = false;
   #running = false;
   #stepScale = 1;
@@ -256,6 +259,17 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
   }
 
   /**
+   * @summary Set the active audio sink.
+   * @param sink - The sink game sound requests are forwarded to.
+   * @author MathAid
+   */
+  setAudio(sink: IAudioSink): void {
+    this.#audio = sink;
+    this.#simulation.setAudio(sink);
+    this.#emitter.emit('audioChanged', { sink });
+  }
+
+  /**
    * @summary Start the loop.
    * @return Resolves once the first frame is scheduled (not when the engine stops).
    * @author MathAid
@@ -274,6 +288,7 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
             dt: 0,
             metrics: this.#simulation.metrics,
             input,
+            audio: this.#audio,
           });
           this.#applyStepSignal(signal ?? 'continue');
           const presentSignal = this.#present?.({
