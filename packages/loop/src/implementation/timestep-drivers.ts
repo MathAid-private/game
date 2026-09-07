@@ -19,6 +19,7 @@ import type {
   IGame,
   IInputState,
   ISimulationDriver,
+  Nanoseconds,
   StepResult,
   Timestamp,
 } from '../types';
@@ -47,6 +48,7 @@ export class VariableTimestepDriver<G extends IGame = IGame> implements ISimulat
   readonly #game: G;
   readonly #timeClock: IClock;
   #lastNow: Timestamp;
+  #lastDt = 0;
 
   /**
    * @summary Construct a variable-timestep driver.
@@ -80,6 +82,22 @@ export class VariableTimestepDriver<G extends IGame = IGame> implements ISimulat
   }
 
   /**
+   * @summary The dt applied to the most recent step.
+   * @author MathAid
+   */
+  get lastDt(): Nanoseconds {
+    return this.#lastDt;
+  }
+
+  /**
+   * @summary Always `0` — a variable driver has no fixed accumulator.
+   * @author MathAid
+   */
+  get pendingSteps(): number {
+    return 0;
+  }
+
+  /**
    * @summary The sub-frame interpolation factor — always `0` for variable timestep.
    * @author MathAid
    */
@@ -106,6 +124,7 @@ export class VariableTimestepDriver<G extends IGame = IGame> implements ISimulat
   advance(nowNanos: Timestamp, input: IInputState): StepResult {
     const dt = nowNanos - this.#lastNow;
     this.#lastNow = nowNanos;
+    this.#lastDt = dt;
     const signal = this.#game.step({ clock: this.#timeClock, dt, metrics: this.#metrics, input });
     this.#metrics.record(1, nowNanos);
     return { steps: 1, signal: signal ?? 'continue' };
@@ -136,6 +155,7 @@ export class CappedVariableTimestepDriver<G extends IGame = IGame>
   readonly #timeClock: IClock;
   readonly #maxDt: number;
   #lastNow: Timestamp;
+  #lastDt = 0;
 
   /**
    * @summary Construct a capped-variable-timestep driver.
@@ -176,6 +196,22 @@ export class CappedVariableTimestepDriver<G extends IGame = IGame>
   }
 
   /**
+   * @summary The (clamped) dt applied to the most recent step.
+   * @author MathAid
+   */
+  get lastDt(): Nanoseconds {
+    return this.#lastDt;
+  }
+
+  /**
+   * @summary Always `0` — a variable driver has no fixed accumulator.
+   * @author MathAid
+   */
+  get pendingSteps(): number {
+    return 0;
+  }
+
+  /**
    * @summary The sub-frame interpolation factor — always `0`.
    * @author MathAid
    */
@@ -203,6 +239,7 @@ export class CappedVariableTimestepDriver<G extends IGame = IGame>
     let dt = nowNanos - this.#lastNow;
     if (dt > this.#maxDt) dt = this.#maxDt;
     this.#lastNow = nowNanos;
+    this.#lastDt = dt;
     const signal = this.#game.step({ clock: this.#timeClock, dt, metrics: this.#metrics, input });
     this.#metrics.record(1, nowNanos);
     return { steps: 1, signal: signal ?? 'continue' };
@@ -262,6 +299,22 @@ export class EventDrivenDriver<G extends IGame = IGame> implements ISimulationDr
    */
   get game(): G {
     return this.#game;
+  }
+
+  /**
+   * @summary Always `0` — an event step carries no time delta.
+   * @author MathAid
+   */
+  get lastDt(): Nanoseconds {
+    return 0;
+  }
+
+  /**
+   * @summary Always `0` — event-driven stepping has no accumulator.
+   * @author MathAid
+   */
+  get pendingSteps(): number {
+    return 0;
   }
 
   /**

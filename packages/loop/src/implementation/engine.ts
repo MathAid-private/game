@@ -28,6 +28,8 @@ import type {
   IInputState,
   IScheduleHandle,
   ISimulationDriver,
+  LiveMetrics,
+  Nanoseconds,
   PresentSignal,
   StepSignal,
   Timestamp,
@@ -106,6 +108,7 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
   #renderScale = 1;
   #frameIndex = 0;
   #lastGuiNanos = Number.NEGATIVE_INFINITY;
+  #startNanos = 0;
   #handle: IScheduleHandle | null = null;
 
   on = this.#emitter.on.bind(this.#emitter) as IEngine<G, R>['on'];
@@ -133,6 +136,7 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
     this.#config = config;
     this.#host = host;
     this.#present = present ?? null;
+    this.#startNanos = host.now();
     this.#simulation =
       simulation ??
       new FixedTimestepDriver(
@@ -174,6 +178,19 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
    */
   get metrics() {
     return this.#simulation.metrics;
+  }
+
+  /**
+   * @summary A per-frame snapshot of live metrics (FPS/alpha/dt/elapsed).
+   *
+   * @description
+   * Computed on demand from the simulation driver and the host clock. Prefer subscribing to the
+   * `metrics` event for a zero-polling HUD; this getter is for one-off reads.
+   *
+   * @author MathAid
+   */
+  get live(): LiveMetrics {
+    return this.#liveAt(this.#host.now());
   }
 
   /**
@@ -281,10 +298,12 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
           this.#applyPresentSignal(signal ?? 'full');
         }
       }
+      this.#emitter.emit('metrics', this.#liveAt(nowNanos));
       this.#frameIndex++;
       this.#handle = this.#host.schedule(loop);
     };
 
+    this.#startNanos = this.#host.now();
     this.#handle = this.#host.schedule(loop);
     this.#emitter.emit('started');
   }
@@ -354,5 +373,21 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
     if (this.#inputs.size === 0) return NullInputState.INSTANCE;
     const states = Array.from(this.#inputs.values(), (source) => source.sample());
     return states.length === 1 ? states[0] : new CompositeInputState(states);
+  }
+
+  /**
+   * @summary Build a `LiveMetrics` snapshot for a given timestamp.
+   * @param nowNanos - The frame timestamp, in nanoseconds.
+   * @return The snapshot (FPS from the last closed second, alpha, dt, pending, elapsed).
+   * @author MathAid
+   */
+  #liveAt(nowNanos: Nanoseconds): LiveMetrics {
+    return {
+      fps: this.#simulation.metrics.frameHistory.at(-1)?.steps ?? 0,
+      alpha: this.#simulation.interpolation(),
+      dtNanos: this.#simulation.lastDt,
+      pendingSteps: this.#simulation.pendingSteps,
+      elapsedNanos: nowNanos - this.#startNanos,
+    };
   }
 }

@@ -18,7 +18,7 @@
 import type { IClock } from './clock.type';
 import type { IEventEmitter } from './event.type';
 import type { IInputSource } from './input.type';
-import type { IGame, IPerformanceMetrics } from './simulation.type';
+import type { IGame, IPerformanceMetrics, LiveMetrics } from './simulation.type';
 
 /**
  * @summary Static, serialisable configuration for an engine instance.
@@ -76,6 +76,8 @@ export type EngineEvents<R = unknown> = {
   readonly inputDetached: { readonly id: string };
   /** The active render mode changed. */
   readonly rendererChanged: { readonly renderer: R };
+  /** A per-frame snapshot of live metrics (FPS/alpha/dt/elapsed). */
+  readonly metrics: LiveMetrics;
 };
 
 /**
@@ -114,6 +116,8 @@ export interface IEngine<G extends IGame = IGame, R = unknown> extends IEventEmi
   readonly clock: IClock;
   /** Read-only performance metrics. */
   readonly metrics: IPerformanceMetrics;
+  /** A per-frame snapshot of live metrics (FPS/alpha/dt/elapsed). */
+  readonly live: LiveMetrics;
   /** Whether the loop is currently paused. */
   readonly paused: boolean;
   /**

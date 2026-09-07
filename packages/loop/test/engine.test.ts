@@ -119,6 +119,25 @@ describe('Engine', () => {
     void engine.stop();
   });
 
+  it('emits a live metrics snapshot each frame', () => {
+    const snapshots: { dtNanos: number; elapsedNanos: number }[] = [];
+    const game: IGame = { step: () => {}, present: () => {} };
+    const { clock, scheduler, host } = manualHost();
+    const engine = new Engine(game, { fps: 60 }, host);
+    engine.on('metrics', (m) => snapshots.push(m));
+    void engine.run();
+
+    const frame = SecondMetric.NANOSECONDS / 60;
+    clock.advance(frame);
+    scheduler.tick(clock.now());
+
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots[0].dtNanos).toBe(SecondMetric.NANOSECONDS / 60);
+    expect(snapshots[0].elapsedNanos).toBeGreaterThanOrEqual(frame);
+    expect(engine.live.fps).toBe(0); // first one-second window not closed yet
+    void engine.stop();
+  });
+
   it('emits lifecycle events across start/stop and pause/resume', () => {
     const events: string[] = [];
     const game: IGame = { step: () => {}, present: () => {} };

@@ -18,6 +18,7 @@ import type {
   IGame,
   IInputState,
   ISimulationDriver,
+  Nanoseconds,
   StepResult,
   StepSignal,
   Timestamp,
@@ -97,6 +98,22 @@ export class FixedTimestepDriver<G extends IGame = IGame> implements ISimulation
    */
   get game(): G {
     return this.#game;
+  }
+
+  /**
+   * @summary The dt applied to every step — the fixed step interval.
+   * @author MathAid
+   */
+  get lastDt(): Nanoseconds {
+    return this.#clock.stepInterval;
+  }
+
+  /**
+   * @summary The accumulator's remaining fraction (also the presentation `alpha`).
+   * @author MathAid
+   */
+  get pendingSteps(): number {
+    return this.#clock.pending;
   }
 
   /**

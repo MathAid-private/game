@@ -154,3 +154,7 @@ Landed on the transient `dev` branch (see `PROPOSALS.md` for the step-by-step pl
   throttled GUI loop (`GUI_INTERVAL_NS`, 10 Hz): a menu-navigation `step` (`dt: 0`) plus a
   `present`, so a pause menu stays interactive and can request `'resume'` — which returns authority
   to the engine and resets the clock.
+- **Live metrics (§3)** — `LiveMetrics { fps, alpha, dtNanos, pendingSteps, elapsedNanos }` in
+  `simulation.type.ts`; `ISimulationDriver` gained `lastDt`/`pendingSteps` accessors (all four
+  drivers implement them). `Engine` exposes a `live` getter and emits a per-frame `metrics` event
+  (`EngineEvents.metrics`) for zero-polling HUDs.

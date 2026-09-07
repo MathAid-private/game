@@ -172,6 +172,32 @@ export interface IPerformanceMetrics {
 }
 
 /**
+ * @summary A per-frame snapshot of live engine metrics for a HUD or profiler.
+ *
+ * @description
+ * `LiveMetrics` is a plain-data snapshot the engine computes once per frame (and emits as a
+ * `metrics` event) so a host can render FPS, interpolation, and timing live without polling
+ * internal state. `fps` is the step count of the most recently closed one-second window (so it is
+ * `0` until the first full second completes); `pendingSteps` is the fixed accumulator's remainder
+ * (equal to `alpha` for a fixed driver, `0` for non-fixed drivers).
+ *
+ * @see {@link IPerformanceMetrics}
+ * @author MathAid
+ */
+export interface LiveMetrics {
+  /** Steps in the most recently closed one-second window (`0` early on). */
+  readonly fps: number;
+  /** Current sub-frame interpolation factor in `[0, 1)`. */
+  readonly alpha: Alpha;
+  /** The dt applied to the most recent step, in nanoseconds. */
+  readonly dtNanos: Nanoseconds;
+  /** The accumulator remainder (fixed drivers); `0` otherwise. */
+  readonly pendingSteps: number;
+  /** Wall time elapsed since the engine started, in nanoseconds. */
+  readonly elapsedNanos: Nanoseconds;
+}
+
+/**
  * @summary The context handed to a game during one simulation step.
  *
  * @description
@@ -335,6 +361,10 @@ export interface ISimulationDriver<G extends IGame = IGame> {
   readonly metrics: IPerformanceMetrics;
   /** The game being driven. */
   readonly game: G;
+  /** The dt applied to the most recent step, in nanoseconds. */
+  readonly lastDt: Nanoseconds;
+  /** The fixed accumulator's remaining fraction (`0` for non-fixed drivers). */
+  readonly pendingSteps: number;
   /**
    * @summary Advance the simulation by a wall-clock sample.
    * @param now - Current monotonic timestamp, in nanoseconds.
