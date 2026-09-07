@@ -12,7 +12,15 @@
  * @author MathAid
  */
 
-import type { IGame, IPresentationContext, ISimulationContext } from '@games/loop';
+import type {
+  IAudioSink,
+  IGame,
+  IInputState,
+  IPresentationContext,
+  ISimulationContext,
+  PresentSignal,
+  StepSignal,
+} from '@games/loop';
 import { Mulberry, type Color, type Rect } from '@games/math';
 import type { IFrameBuilder } from '@games/render';
 import { COLORS, PIECE_TYPES, SHAPES, rotate, type Mino, type PieceType } from './tetromino';
@@ -32,6 +40,18 @@ const ORIGIN_Y = 540;
 const BACKGROUND: Color = { r: 0.07, g: 0.07, b: 0.1, a: 1 };
 /** The board border colour. */
 const BORDER: Color = { r: 0.5, g: 0.5, b: 0.55, a: 1 };
+
+/** Pause-menu text colour. */
+const MENU_TEXT: Color = { r: 0.9, g: 0.9, b: 0.9, a: 1 };
+/** Pause-menu highlight (selected item) colour. */
+const MENU_HIGHLIGHT: Color = { r: 1, g: 0.85, b: 0.3, a: 1 };
+/** Pause-menu dim (hint) colour. */
+const MENU_DIM: Color = { r: 0.55, g: 0.55, b: 0.6, a: 1 };
+
+/** Selectable gravity speeds (steps between falls). */
+const SPEEDS = [10, 20, 30, 60] as const;
+/** Selectable master volumes. */
+const VOLUMES = [0, 0.25, 0.5, 0.75, 1] as const;
 
 /**
  * @summary The logical actions Tetris reads, as engine-agnostic action ids.
@@ -204,8 +224,8 @@ interface ActivePiece {
  * @author MathAid
  */
 export class Tetris implements IStatefulGame<IFrameBuilder> {
-  readonly #gravitySteps: number;
-  readonly #bag: Bag;
+  #gravitySteps: number;
+  #bag: Bag;
   readonly #board: (Color | null)[][] = [];
   #current: ActivePiece;
   #next: ActivePiece;
@@ -218,6 +238,10 @@ export class Tetris implements IStatefulGame<IFrameBuilder> {
   #highScore = 0;
   #highDeluxe = 0;
   #highClears = 0;
+  #seed: number;
+  #volume = 0.5;
+  #menuIndex = 0;
+  #audio: IAudioSink | null = null;
 
   #paused: boolean;
 
@@ -229,6 +253,7 @@ export class Tetris implements IStatefulGame<IFrameBuilder> {
    */
   constructor(seed = 1, gravitySteps = 30) {
     this.#gravitySteps = gravitySteps;
+    this.#seed = seed;
     this.#bag = new Bag(Mulberry.mulberry32(seed));
     for (let row = 0; row < ROWS; row++) this.#board.push(new Array<Color | null>(COLS).fill(null));
     this.#current = this.#spawn(this.#bag.next());
@@ -266,25 +291,31 @@ export class Tetris implements IStatefulGame<IFrameBuilder> {
    * @param context - Timing, metrics, and the frame's logical input.
    * @author MathAid
    */
-  step(context: ISimulationContext): void {
+  step(context: ISimulationContext): StepSignal {
     const input = context.input;
-    if (input.wasPressed(TETRIS_ACTIONS.pause)) this.#pause();
-    if (!this.#paused) {
-      if (input.wasPressed(TETRIS_ACTIONS.rotate)) this.#rotate();
-      if (input.wasPressed(TETRIS_ACTIONS.moveLeft)) this.#move(-1);
-      if (input.wasPressed(TETRIS_ACTIONS.moveRight)) this.#move(1);
-      if (input.wasPressed(TETRIS_ACTIONS.hardDrop)) this.#hardDrop();
+    this.#audio = context.audio;
 
-      this.#stepCounter++;
-      const interval = input.isDown(TETRIS_ACTIONS.softDrop)
-        ? Math.max(1, Math.floor(this.#gravitySteps / 4))
-        : this.#gravitySteps;
-      if (this.#stepCounter >= interval) {
-        this.#stepCounter = 0;
-        this.#combo = clamp01(this.#combo - 0.001);
-        this.#fall();
-      }
+    if (input.wasPressed(TETRIS_ACTIONS.pause)) {
+      this.#pause();
+      return this.#paused ? 'pause' : 'resume';
     }
+    if (this.#paused) return this.#menuStep(input);
+
+    if (input.wasPressed(TETRIS_ACTIONS.rotate)) this.#rotate();
+    if (input.wasPressed(TETRIS_ACTIONS.moveLeft)) this.#move(-1);
+    if (input.wasPressed(TETRIS_ACTIONS.moveRight)) this.#move(1);
+    if (input.wasPressed(TETRIS_ACTIONS.hardDrop)) this.#hardDrop();
+
+    this.#stepCounter++;
+    const interval = input.isDown(TETRIS_ACTIONS.softDrop)
+      ? Math.max(1, Math.floor(this.#gravitySteps / 4))
+      : this.#gravitySteps;
+    if (this.#stepCounter >= interval) {
+      this.#stepCounter = 0;
+      this.#combo = clamp01(this.#combo - 0.001);
+      this.#fall();
+    }
+    return 'continue';
   }
 
   /**
@@ -292,8 +323,13 @@ export class Tetris implements IStatefulGame<IFrameBuilder> {
    * @param context - The interpolation factor and the frame builder to write into.
    * @author MathAid
    */
-  present(context: IPresentationContext<IFrameBuilder>): void {
+  present(context: IPresentationContext<IFrameBuilder>): PresentSignal {
     const { frame } = context;
+    if (this.#paused) {
+      this.#drawMenu(frame);
+      return 'reduced';
+    }
+
     frame.clear(BACKGROUND);
 
     for (let row = 0; row < ROWS; row++) {
@@ -323,6 +359,7 @@ export class Tetris implements IStatefulGame<IFrameBuilder> {
       undefined,
       { color: BORDER, width: 1 },
     );
+    return 'full';
   }
 
   /**
@@ -369,6 +406,108 @@ export class Tetris implements IStatefulGame<IFrameBuilder> {
 
   #pause() {
     this.#paused = !this.#paused;
+    if (this.#paused) this.#menuIndex = 0;
+  }
+
+  /**
+   * @summary Navigate and edit the pause menu; returns `'resume'` when the player exits.
+   * @param input - The menu-frame input snapshot.
+   * @return `'continue'` to stay paused, or `'resume'` to hand control back to the engine.
+   * @author MathAid
+   */
+  #menuStep(input: IInputState): StepSignal {
+    const length = this.#menuItems().length;
+    if (input.wasPressed(TETRIS_ACTIONS.softDrop)) this.#menuIndex = (this.#menuIndex + 1) % length;
+    if (input.wasPressed(TETRIS_ACTIONS.rotate)) this.#menuIndex = (this.#menuIndex - 1 + length) % length;
+    if (input.wasPressed(TETRIS_ACTIONS.moveLeft)) this.#cycleSetting(-1);
+    if (input.wasPressed(TETRIS_ACTIONS.moveRight)) this.#cycleSetting(1);
+    return 'continue';
+  }
+
+  /**
+   * @summary The pause menu's items: label and current value, in display order.
+   * @return The menu items.
+   * @author MathAid
+   */
+  #menuItems(): { readonly label: string; readonly value: string }[] {
+    return [
+      { label: 'Speed', value: `${this.#gravitySteps} steps` },
+      { label: 'Volume', value: `${Math.round(this.#volume * 100)}%` },
+      { label: 'Seed', value: `${this.#seed}` },
+      { label: 'Colours', value: 'default' },
+      { label: 'RNG', value: 'mulberry32' },
+      { label: 'Keymap', value: '←→ move · ↑ rotate · ↓ drop · Space hard · Esc pause' },
+    ];
+  }
+
+  /**
+   * @summary Cycle the selected setting by one step.
+   * @param dir - `+1` or `-1`.
+   * @author MathAid
+   */
+  #cycleSetting(dir: number): void {
+    switch (this.#menuIndex) {
+      case 0: {
+        const i = SPEEDS.indexOf(this.#gravitySteps as (typeof SPEEDS)[number]);
+        this.#gravitySteps = SPEEDS[(i + dir + SPEEDS.length) % SPEEDS.length];
+        break;
+      }
+      case 1: {
+        const i = VOLUMES.indexOf(this.#volume as (typeof VOLUMES)[number]);
+        this.#volume = VOLUMES[(i + dir + VOLUMES.length) % VOLUMES.length];
+        this.#audio?.setVolume(this.#volume);
+        break;
+      }
+      case 2: {
+        this.#seed = ((this.#seed - 1 + dir + 9) % 9) + 1;
+        this.#rebuildBag();
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  /**
+   * @summary Rebuild the piece bag from the current seed and respawn the queue.
+   * @author MathAid
+   */
+  #rebuildBag(): void {
+    this.#bag = new Bag(Mulberry.mulberry32(this.#seed));
+    this.#current = this.#spawn(this.#bag.next());
+    this.#next = this.#spawn(this.#bag.next());
+  }
+
+  /**
+   * @summary Draw the pause menu over the board.
+   * @param frame - The frame builder to write into.
+   * @author MathAid
+   */
+  #drawMenu(frame: IFrameBuilder): void {
+    frame.clear(BACKGROUND);
+    const items = this.#menuItems();
+
+    frame.text('PAUSED', { x: ORIGIN_X, y: 40 }, { color: MENU_HIGHLIGHT, size: 18 });
+    frame.text(
+      `score ${this.#score} · combo ${this.#combo.toFixed(3)}`,
+      { x: ORIGIN_X, y: 66 },
+      { color: MENU_TEXT, size: 12 },
+    );
+
+    items.forEach((item, i) => {
+      const selected = i === this.#menuIndex;
+      frame.text(
+        `${selected ? '>' : ' '} ${item.label}: ${item.value}`,
+        { x: ORIGIN_X, y: 96 + i * 22 },
+        { color: selected ? MENU_HIGHLIGHT : MENU_TEXT, size: 13 },
+      );
+    });
+
+    frame.text(
+      '↑/↓ select · ←/→ change · Esc resume',
+      { x: ORIGIN_X, y: 96 + items.length * 22 + 10 },
+      { color: MENU_DIM, size: 11 },
+    );
   }
 
   /**

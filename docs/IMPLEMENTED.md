@@ -188,3 +188,8 @@ Landed on the transient `dev` branch (see `PROPOSALS.md` for the step-by-step pl
   `L×2`/`+0.75`, deluxe cascade `+1,+2,…`/`+0.25` each). `Tetris` tracks score, a `[0,1]` combo
   meter (adds on clears, `−0.001` per fall tick, clamped), deluxe points, board-clear count, and
   their in-session highs, exposed via a read-only `metrics` getter.
+- **Tetris pause menu (§9.4)** — `step`/`present` now route by scene and return `StepSignal`/
+  `PresentSignal` (the pause toggle returns `'pause'`/`'resume'`; the menu presents `'reduced'`).
+  The declarative menu edits speed, volume, and seed (`↑`/`↓` select, `←`/`→` change, `Esc`
+  resume), shows colours/RNG/keymap read-only, and applies volume via `context.audio` and the seed
+  by rebuilding the bag.
