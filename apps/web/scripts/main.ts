@@ -152,6 +152,7 @@ function loadGame(id: GameId): {
           [SNAKE_ACTIONS.down]: ['ArrowDown', 'KeyS'],
           [SNAKE_ACTIONS.left]: ['ArrowLeft', 'KeyA'],
           [SNAKE_ACTIONS.right]: ['ArrowRight', 'KeyD'],
+          [SNAKE_ACTIONS.pause]: ['Escape'],
         },
       };
     case 'invaders':

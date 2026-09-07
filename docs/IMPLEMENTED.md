@@ -193,3 +193,7 @@ Landed on the transient `dev` branch (see `PROPOSALS.md` for the step-by-step pl
   The declarative menu edits speed, volume, and seed (`↑`/`↓` select, `←`/`→` change, `Esc`
   resume), shows colours/RNG/keymap read-only, and applies volume via `context.audio` and the seed
   by rebuilding the bag.
+- **Snake pause menu (§10)** — `Snake` gains a `pause` action and a `paused` scene, with
+  `step`/`present` returning `StepSignal`/`PresentSignal` like Tetris. Its menu toggles `mode`
+  (`arcade` — constant speed | `level` — score-ramped speed), `sprites` (rect ↔ sprite rendering),
+  snake/egg colour palettes, stage themes, and obstacles (a fixed centre block the snake dies on).
