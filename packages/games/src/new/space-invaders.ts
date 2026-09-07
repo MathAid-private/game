@@ -12,10 +12,9 @@
  * @author MathAid
  */
 
-import { rectsIntersect, type Color, type Rect } from '@games/math';
+import { Mulberry, rectsIntersect, type Color, type Rect } from '@games/math';
 import type { IGame, IPresentationContext, ISimulationContext } from '@games/loop';
 import type { IFrameBuilder } from '@games/render';
-import { mulberry32 } from './random';
 
 /** Play-field width, in logical pixels. */
 const PLAY_WIDTH = 400;
@@ -146,7 +145,7 @@ export class SpaceInvaders implements IGame<IFrameBuilder> {
    * @author MathAid
    */
   constructor(seed = 1) {
-    this.#rng = mulberry32(seed);
+    this.#rng = Mulberry.mulberry32(seed);
     for (let row = 0; row < INVADER_ROWS; row++) {
       for (let col = 0; col < INVADER_COLS; col++) {
         this.#invaders.push({ col, row, alive: true });

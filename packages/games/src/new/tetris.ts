@@ -13,9 +13,8 @@
  */
 
 import type { IGame, IPresentationContext, ISimulationContext } from '@games/loop';
-import type { Color, Rect } from '@games/math';
+import { Mulberry, type Color, type Rect } from '@games/math';
 import type { IFrameBuilder } from '@games/render';
-import { mulberry32 } from './random';
 import { COLORS, PIECE_TYPES, SHAPES, rotate, type Mino, type PieceType } from './tetromino';
 
 /** Board width, in cells. */
@@ -134,7 +133,7 @@ export class Tetris implements IGame<IFrameBuilder> {
    */
   constructor(seed = 1, gravitySteps = 30) {
     this.#gravitySteps = gravitySteps;
-    this.#bag = new Bag(mulberry32(seed));
+    this.#bag = new Bag(Mulberry.mulberry32(seed));
     for (let row = 0; row < ROWS; row++) this.#board.push(new Array<Color | null>(COLS).fill(null));
     this.#current = this.#spawn(this.#bag.next());
     this.#next = this.#spawn(this.#bag.next());

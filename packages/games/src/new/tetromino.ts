@@ -44,7 +44,7 @@ export type PieceType = 'I' | 'O' | 'T' | 'S' | 'Z' | 'J' | 'L';
  * @summary The ordered seven pieces, used to seed the randomiser bag.
  * @author MathAid
  */
-export const PIECE_TYPES: readonly PieceType[] = ['I', 'O', 'T', 'S', 'Z', 'J', 'L'];
+export const PIECE_TYPES: readonly PieceType[] = Object.freeze(['I', 'O', 'T', 'S', 'Z', 'J', 'L']);
 
 /**
  * @summary The cell layout of each piece in its local coordinate space.

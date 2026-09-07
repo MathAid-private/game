@@ -45,7 +45,7 @@ export class ManualScheduler implements IScheduler {
 
   /**
    * @summary Stop firing the registered callback.
-   * @param handle - The value returned by `schedule`. A no-op if none is registered.
+   * @param _handle - The value returned by `schedule`. A no-op if none is registered.
    * @author MathAid
    */
   cancel(_handle: IScheduleHandle): void {

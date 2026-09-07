@@ -11,10 +11,9 @@
  * @author MathAid
  */
 
-import type { Color } from '@games/math';
+import { Mulberry, type Color } from '@games/math';
 import type { IGame, IPresentationContext, ISimulationContext } from '@games/loop';
 import type { IFrameBuilder } from '@games/render';
-import { mulberry32 } from './random';
 
 /** Grid width, in cells. */
 const COLS = 20;
@@ -126,7 +125,7 @@ export class Snake implements IGame<IFrameBuilder> {
    */
   constructor(seed = 1, moveSteps = 8) {
     this.#moveSteps = moveSteps;
-    this.#rng = mulberry32(seed);
+    this.#rng = Mulberry.mulberry32(seed);
     const startCol = Math.floor(COLS / 2);
     const startRow = Math.floor(ROWS / 2);
     this.#body.push(

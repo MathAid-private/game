@@ -158,7 +158,7 @@ function cmp(a: readonly number[], b: readonly number[]): -1 | 0 | 1 {
  * @example
  * // Extract the low byte of the high word
  * and([0xDEAD_BEEF, 0x0000_0000], [0x0000_00FF, 0x0000_0000]);
- * // → [0x0000_00EF, 0x0000_0000]
+ * // -> [0x0000_00EF, 0x0000_0000]
  */
 export function and(a: readonly number[], b: readonly number[]): number[] {
   const [pa, pb, len] = pad(a, b);
@@ -183,7 +183,7 @@ export function and(a: readonly number[], b: readonly number[]): number[] {
  * @example
  * // Merge two partial controller states
  * or([0xFF00_0000, 0x0000_0000], [0x0000_0000, 0x0000_00FF]);
- * // → [0xFF00_0000, 0x0000_00FF]
+ * // -> [0xFF00_0000, 0x0000_00FF]
  */
 export function or(a: readonly number[], b: readonly number[]): number[] {
   const [pa, pb, len] = pad(a, b);
@@ -230,8 +230,8 @@ export function xor(a: readonly number[], b: readonly number[]): number[] {
  * @returns New array with every bit flipped.
  *
  * @example
- * not([0xFFFF_FF00]); // → [0x0000_00FF]
- * not([0x0000_0000, 0xFFFF_FFFF]); // → [0xFFFF_FFFF, 0x0000_0000]
+ * not([0xFFFF_FF00]); // -> [0x0000_00FF]
+ * not([0x0000_0000, 0xFFFF_FFFF]); // -> [0xFFFF_FFFF, 0x0000_0000]
  */
 export function not(a: readonly number[]): number[] {
   const out = new Array<number>(a.length);
@@ -309,11 +309,11 @@ export function nor(a: readonly number[], b: readonly number[]): number[] {
  *
  * @example
  * add([0xFFFF_FFFF], [0x0000_0001]);
- * // → [0x0000_0001, 0x0000_0000]  (carry promoted to new high word)
+ * // -> [0x0000_0001, 0x0000_0000]  (carry promoted to new high word)
  *
  * @example
  * add([0x0000_0001, 0xFFFF_FFFF], [0x0000_0000, 0x0000_0001]);
- * // → [0x0000_0000, 0x0000_0002, 0x0000_0000]
+ * // -> [0x0000_0000, 0x0000_0002, 0x0000_0000]
  */
 export function add(a: readonly number[], b: readonly number[]): number[] {
   const [pa, pb, len] = pad(a, b);
@@ -349,13 +349,13 @@ export function add(a: readonly number[], b: readonly number[]): number[] {
  * @returns `max(0, a - b)` as a big-endian word array.
  *
  * @example
- * subtract([0x0000_0005], [0x0000_0003]); // → [0x0000_0002]
- * subtract([0x0000_0003], [0x0000_0005]); // → [0x0000_0000]  (saturated)
+ * subtract([0x0000_0005], [0x0000_0003]); // -> [0x0000_0002]
+ * subtract([0x0000_0003], [0x0000_0005]); // -> [0x0000_0000]  (saturated)
  *
  * @example
  * // Multi-word borrow
  * subtract([0x0000_0001, 0x0000_0000], [0x0000_0000, 0x0000_0001]);
- * // → [0x0000_0000, 0xFFFF_FFFF]
+ * // -> [0x0000_0000, 0xFFFF_FFFF]
  */
 export function subtract(a: readonly number[], b: readonly number[]): number[] {
   const outLen = Math.max(a.length, b.length);
@@ -397,12 +397,12 @@ export function subtract(a: readonly number[], b: readonly number[]): number[] {
  *
  * @example
  * multiply([0xFFFF_FFFF], [0xFFFF_FFFF]);
- * // → [0xFFFF_FFFE, 0x0000_0001]
+ * // -> [0xFFFF_FFFE, 0x0000_0001]
  * // (i.e. (2³²−1)² = 2⁶⁴ − 2³³ + 1)
  *
  * @example
  * multiply([0x0000_0002, 0x0000_0000], [0x0000_0003]);
- * // → [0x0000_0000, 0x0000_0006, 0x0000_0000]
+ * // -> [0x0000_0000, 0x0000_0006, 0x0000_0000]
  */
 export function multiply(a: readonly number[], b: readonly number[]): number[] {
   const out = new Array<number>(a.length + b.length).fill(0);
@@ -440,9 +440,9 @@ export function multiply(a: readonly number[], b: readonly number[]): number[] {
  * @throws {RangeError} When `b` is zero.
  *
  * @example
- * divide([0x0000_000A], [0x0000_0003]); // → [0x0000_0003]
+ * divide([0x0000_000A], [0x0000_0003]); // -> [0x0000_0003]
  * divide([0x0000_0000, 0x0000_0007], [0x0000_0000, 0x0000_0002]);
- * // → [0x0000_0000, 0x0000_0003]
+ * // -> [0x0000_0000, 0x0000_0003]
  */
 export function divide(a: readonly number[], b: readonly number[]): number[] {
   const nb = toBig(b);
@@ -467,7 +467,7 @@ export function divide(a: readonly number[], b: readonly number[]): number[] {
  * @throws {RangeError} When `b` is zero.
  *
  * @example
- * remainder([0x0000_000A], [0x0000_0003]); // → [0x0000_0001]
+ * remainder([0x0000_000A], [0x0000_0003]); // -> [0x0000_0001]
  */
 export function remainder(a: readonly number[], b: readonly number[]): number[] {
   const nb = toBig(b);
@@ -490,10 +490,135 @@ export function remainder(a: readonly number[], b: readonly number[]): number[] 
  * @returns `-1` if `a < b`, `0` if `a === b`, `1` if `a > b`.
  *
  * @example
- * compare([0x0000_0001], [0x0000_0002]); // → -1
- * compare([0x0000_0002], [0x0000_0002]); // →  0
- * compare([0x0000_0003], [0x0000_0002]); // →  1
+ * compare([0x0000_0001], [0x0000_0002]); // -> -1
+ * compare([0x0000_0002], [0x0000_0002]); // ->  0
+ * compare([0x0000_0003], [0x0000_0002]); // ->  1
  */
 export function compare(a: readonly number[], b: readonly number[]): -1 | 0 | 1 {
   return cmp(a, b);
+}
+
+/**
+ * @summary The number of bits in the unsigned representation of a `bigint`.
+ *
+ * @description
+ * `bitLength` returns how many binary digits the absolute value of `n` occupies — equivalently
+ * `⌊log2(|n|)⌋ + 1` for non-zero `n`, and `0` for `n === 0`. It is the width a caller needs to hold
+ * `n`, and the basis for the mask helpers below.
+ *
+ * @param n - The value to measure; its sign is ignored.
+ * @return The bit width (`0` for zero).
+ *
+ * @example
+ * bitLength(0n);   // 0
+ * bitLength(15n);  // 4  (0b1111)
+ * bitLength(255n); // 8  (0b11111111)
+ *
+ * @see {@link ones}
+ * @see {@link zeros}
+ * @author MathAid
+ */
+export function bitLength(n: bigint): number {
+  const x = n < 0n ? -n : n;
+  return x === 0n ? 0 : x.toString(2).length;
+}
+
+/**
+ * @summary A bitmask of `length` set bits (the low `length` bits).
+ *
+ * @description
+ * `ones` returns `(1 << length) - 1` — a value whose lowest `length` bits are `1` and all higher
+ * bits are `0`. It is the natural "all bits set up to a width" mask, used by the PCG generators to
+ * build state/output masks.
+ *
+ * @param length - The number of low bits to set. Negative values are coerced to `0`.
+ * @return The bitmask.
+ *
+ * @example
+ * ones(8); // 0xFFn
+ *
+ * @see {@link bitLength}
+ * @author MathAid
+ */
+export function ones(length: number): bigint {
+  return (1n << BigInt(length >>> 0)) - 1n;
+}
+
+/**
+ * @summary A bitmask spanning the full bit width of `n`.
+ *
+ * @description
+ * `onesFrom` returns `ones(bitLength(n))` — all bits set up to `n`'s most significant bit. It is a
+ * convenient way to produce "a mask wide enough for `n`".
+ *
+ * @param n - The value whose width determines the mask.
+ * @return The bitmask.
+ *
+ * @example
+ * onesFrom(0xFFn); // 0xFFn (8 ones)
+ *
+ * @see {@link ones}
+ * @author MathAid
+ */
+export function onesFrom(n: bigint): bigint {
+  return ones(bitLength(n));
+}
+
+/**
+ * @summary The value with exactly the `length`th bit set (`1 << length`).
+ *
+ * @description
+ * `zeros` returns `1 << length` — a single `1` followed by `length` zero bits. Despite the name it
+ * is *not* a mask of zeros; it is the complement position of `ones(length)` (`(1 << length) - 1`).
+ *
+ * @param length - The bit position to set. Negative values are coerced to `0`.
+ * @return `2^length`.
+ *
+ * @example
+ * zeros(8); // 0x100n
+ *
+ * @see {@link ones}
+ * @author MathAid
+ */
+export function zeros(length: number): bigint {
+  return 1n << BigInt(length >>> 0);
+}
+
+/**
+ * @summary The smallest power of two strictly greater than `n` (or `2^bitLength(n)`).
+ *
+ * @description
+ * `zerosFrom` returns `zeros(bitLength(n))` — the value `2^bitLength(n)`, which is the smallest
+ * power of two larger than `n` (for positive `n`).
+ *
+ * @param n - The value whose width determines the power.
+ * @return `2^bitLength(n)`.
+ *
+ * @example
+ * zerosFrom(0xFFn); // 0x100n
+ *
+ * @see {@link zeros}
+ * @author MathAid
+ */
+export function zerosFrom(n: bigint): bigint {
+  return zeros(bitLength(n));
+}
+
+/**
+ * @summary The absolute value of a `bigint`.
+ *
+ * @description
+ * `abs` returns `n` if non-negative and `-n` otherwise, matching `Math.abs` for integers of
+ * arbitrary width.
+ *
+ * @param n - The value to make non-negative.
+ * @return `|n|`.
+ *
+ * @example
+ * abs(-42n); // 42n
+ *
+ * @author MathAid
+ */
+export function abs(n: bigint): bigint {
+  return n < 0n ? -n : n;
 }
