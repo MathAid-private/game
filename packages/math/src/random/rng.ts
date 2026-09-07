@@ -16,13 +16,22 @@
 
 import { ones } from "../bitwise/words";
 
-// PCG (Permuted Congruential Generator) — a family of PRNGs by Melissa O'Neill.
-// Core idea: run a Linear Congruential Generator (LCG) for state advancement,
-// then apply a permutation function to the output to destroy the visible LCG pattern.
-// This gives excellent statistical quality with tiny state.
-//
-
-// Reference: https://www.pcg-random.org/
+/**
+ * @summary PCG — the Permuted Congruential Generator family (by Melissa O'Neill).
+ *
+ * @description
+ * The `PCG` namespace holds a single factory, `pcg`, that runs a Linear Congruential Generator for
+ * state advancement and then applies the XSH-RR output permutation (XorShift-High, then
+ * Rotate-Right) to destroy the visible LCG pattern. Output width is selectable (8–256 bits) with the
+ * internal state always double that width for LCG headroom. It produces unsigned `bigint` integers
+ * rather than floats.
+ *
+ * @example
+ * const rng = PCG.pcg(1n, 32); // 32-bit bigints, deterministic for seed 1n
+ *
+ * @see {@link PCG.pcg}
+ * @author MathAid
+ */
 export namespace PCG {
   // ---------------------------------------------------------------------------
   // Supported bit widths. PCG's internal state must be DOUBLE the output width
@@ -227,9 +236,20 @@ function splitmix64(seed: bigint): () => bigint {
 }
 
 // ---------------------------------------------------------------------------
-// Mulberry32 — a 32-bit integer-arithmetic PRNG (by Tommy Ettinger). Tiny state
-// and very fast; the default for the games because it needs no `bigint`.
-// ---------------------------------------------------------------------------
+/**
+ * @summary Mulberry32 — a small, fast 32-bit PRNG family (by Tommy Ettinger).
+ *
+ * @description
+ * The `Mulberry` namespace provides `mulberry32` (float output in `[0, 1)`) and `mulberry32BigInt`
+ * (n-bit `bigint` output), both driven by the same 32-bit integer-arithmetic core. The float path
+ * needs no `bigint`, so it is the default for the games.
+ *
+ * @example
+ * const rng = Mulberry.mulberry32(1);
+ *
+ * @see {@link Mulberry.mulberry32}
+ * @author MathAid
+ */
 export namespace Mulberry {
   /**
    * @summary Mulberry32 — a small, fast 32-bit PRNG producing floats in `[0, 1)`.
@@ -308,8 +328,21 @@ export namespace Mulberry {
 }
 
 // ---------------------------------------------------------------------------
-// Xoshiro256** — a 256-bit state, 64-bit output generator (Blackman & Vigna).
-// ---------------------------------------------------------------------------
+/**
+ * @summary Xoshiro256** — a 256-bit state, 64-bit output generator (Blackman & Vigna).
+ *
+ * @description
+ * The `Xoshiro` namespace provides `xoshiro256ss`, which keeps four 64-bit state words, scrambles one
+ * with the `**` finaliser (multiply–rotate–multiply) for its output, and applies the xoshiro256
+ * linear transition. It is fast and passes the stronger statistical suites. The seed is expanded into
+ * the four words via `splitmix64`, so the state is never accidentally all-zero.
+ *
+ * @example
+ * const rng = Xoshiro.xoshiro256ss(1n);
+ *
+ * @see {@link Xoshiro.xoshiro256ss}
+ * @author MathAid
+ */
 export namespace Xoshiro {
   /**
    * @summary Xoshiro256** — a 256-bit state, 64-bit output generator.
@@ -348,8 +381,20 @@ export namespace Xoshiro {
 }
 
 // ---------------------------------------------------------------------------
-// SFC64 — a Small Fast Chaotic 64-bit generator (Chris Doty-Humphrey).
-// ---------------------------------------------------------------------------
+/**
+ * @summary SFC64 — a Small Fast Chaotic 64-bit generator (Chris Doty-Humphrey).
+ *
+ * @description
+ * The `SFC64` namespace provides `sfc64`, which keeps four 64-bit words, outputs their sum, and
+ * updates the words with a counter, shifts, and a rotate. It is extremely fast with a long period —
+ * a common choice for hot loops. The seed is expanded into the four words via `splitmix64`.
+ *
+ * @example
+ * const rng = SFC64.sfc64(1n);
+ *
+ * @see {@link SFC64.sfc64}
+ * @author MathAid
+ */
 export namespace SFC64 {
   /**
    * @summary SFC64 — a Small Fast Chaotic 64-bit generator.
@@ -385,8 +430,20 @@ export namespace SFC64 {
 }
 
 // ---------------------------------------------------------------------------
-// Wyrand — the 64-bit generator from wyhash (Wang Yi).
-// ---------------------------------------------------------------------------
+/**
+ * @summary Wyrand — the 64-bit generator from wyhash (Wang Yi).
+ *
+ * @description
+ * The `Wyrand` namespace provides `wyrand`, which advances a 64-bit state by a fixed constant and
+ * mixes it through a 128-bit self-multiplication, folding the high half back into the low half. It is
+ * the mixer used by the wyhash family and is extremely fast with good quality.
+ *
+ * @example
+ * const rng = Wyrand.wyrand(1n);
+ *
+ * @see {@link Wyrand.wyrand}
+ * @author MathAid
+ */
 export namespace Wyrand {
   /**
    * @summary Wyrand — the 64-bit generator from wyhash.
@@ -418,8 +475,21 @@ export namespace Wyrand {
 }
 
 // ---------------------------------------------------------------------------
-// Squares — a counter-based 64-bit generator (Bernard Widynski).
-// ---------------------------------------------------------------------------
+/**
+ * @summary Squares — a counter-based 64-bit generator (Bernard Widynski).
+ *
+ * @description
+ * The `Squares` namespace provides `squares`, a counter-mode generator that increments a counter each
+ * call and runs three rounds of squaring (with a 32-bit half-swap between rounds) against a fixed
+ * key, returning the top 32 bits of the final square. It is robust across many parallel streams
+ * distinguished by their key.
+ *
+ * @example
+ * const rng = Squares.squares(12345n);
+ *
+ * @see {@link Squares.squares}
+ * @author MathAid
+ */
 export namespace Squares {
   /**
    * @summary Squares — a counter-based 64-bit generator.
