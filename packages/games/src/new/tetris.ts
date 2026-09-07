@@ -25,7 +25,7 @@ const ROWS = 20;
 const TILE = 24;
 /** Board origin (top-left), in logical pixels. */
 const ORIGIN_X = 12;
-const ORIGIN_Y = 12;
+const ORIGIN_Y = 540;
 
 /** The board background colour. */
 const BACKGROUND: Color = { r: 0.07, g: 0.07, b: 0.1, a: 1 };
@@ -127,6 +127,7 @@ export class Tetris implements IGame<IFrameBuilder> {
   #linesCleared = 0;
 
   #paused: boolean;
+  // #score: number;
 
   /**
    * @summary Construct a Tetris game.
@@ -181,12 +182,22 @@ export class Tetris implements IGame<IFrameBuilder> {
     for (let row = 0; row < ROWS; row++) {
       for (let col = 0; col < COLS; col++) {
         const color = this.#board[row][col];
-        if (color !== null) frame.rect(this.#cellRect(col, row), color);
+        if (color !== null) {
+          frame.rect(this.#cellRect(col, row), color, {
+            color: { r: 1, g: 1, b: 1, a: 1 },
+            width: 1,
+          });
+        }
       }
     }
 
     for (const cell of this.#current.cells) {
-      if (cell.row >= 0) frame.rect(this.#cellRect(cell.col, cell.row), COLORS[this.#current.type]);
+      if (cell.row >= 0) {
+        frame.rect(this.#cellRect(cell.col, cell.row), COLORS[this.#current.type], {
+          color: { r: 1, g: 1, b: 1, a: 1 },
+          width: 1,
+        });
+      }
     }
 
     this.#drawNext(frame);
@@ -213,6 +224,7 @@ export class Tetris implements IGame<IFrameBuilder> {
       frame.rect(
         { x: boxX + cell.col * TILE, y: boxY + (cell.row + 1) * TILE, width: TILE, height: TILE },
         COLORS[this.#next.type],
+        { color: { r: 1, g: 1, b: 1, a: 1 }, width: 1 },
       );
     }
   }
@@ -239,7 +251,7 @@ export class Tetris implements IGame<IFrameBuilder> {
   }
 
   #pause() {
-    this.#paused = !this.#paused
+    this.#paused = !this.#paused;
   }
 
   /**
