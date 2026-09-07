@@ -83,6 +83,19 @@ export const FPS_CACHE_CAPACITY = 60;
 export const MAX_CATCHUP_STEPS = 5;
 
 /**
+ * @summary The minimum wall-time between paused-loop GUI ticks, in nanoseconds.
+ *
+ * @description
+ * `GUI_INTERVAL_NS` is the "weaker repaint schedule" used while the engine is paused: instead of
+ * stepping/presenting every host frame, the engine runs a single menu-navigation step and one
+ * presentation pass at most this often (10 Hz). A static pause menu needs far less than a full
+ * frame rate, so this keeps the paused loop nearly free.
+ *
+ * @author MathAid
+ */
+export const GUI_INTERVAL_NS = SecondMetric.NANOSECONDS / 10;
+
+/**
  * @summary The frequency unit scale: each member is the number of hertz per that unit.
  *
  * @description

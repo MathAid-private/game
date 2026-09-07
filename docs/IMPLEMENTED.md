@@ -149,3 +149,8 @@ Landed on the transient `dev` branch (see `PROPOSALS.md` for the step-by-step pl
   `StepResult { steps, signal }`; `FixedTimestepDriver` stops stepping on `'skip'`/`'pause'`.
   `Engine` interprets signals via `#stepScale`/`#renderScale` (throttle halves the step/render rate,
   `'none'` stops rendering) while remaining the single authority over pause.
+- **Dual pause (§2)** — the engine keeps `IEngine.paused` as the loop-cadence authority, and the game
+  keeps its own scene pause via `step`'s `'pause'`/`'resume'` signals. While paused the engine runs a
+  throttled GUI loop (`GUI_INTERVAL_NS`, 10 Hz): a menu-navigation `step` (`dt: 0`) plus a
+  `present`, so a pause menu stays interactive and can request `'resume'` — which returns authority
+  to the engine and resets the clock.

@@ -15,7 +15,7 @@
  * @author MathAid
  */
 
-import { FPS_CACHE_CAPACITY, MAX_CATCHUP_STEPS } from '../const';
+import { FPS_CACHE_CAPACITY, GUI_INTERVAL_NS, MAX_CATCHUP_STEPS } from '../const';
 import type {
   Alpha,
   EngineEvents,
@@ -105,6 +105,7 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
   #stepScale = 1;
   #renderScale = 1;
   #frameIndex = 0;
+  #lastGuiNanos = Number.NEGATIVE_INFINITY;
   #handle: IScheduleHandle | null = null;
 
   on = this.#emitter.on.bind(this.#emitter) as IEngine<G, R>['on'];
@@ -192,6 +193,7 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
     if (value === this.#paused) return;
     if (value) {
       this.#paused = true;
+      this.#lastGuiNanos = Number.NEGATIVE_INFINITY; // show the pause menu immediately
       this.#emitter.emit('paused');
     } else {
       this.#simulation.reset(this.#host.now());
@@ -242,9 +244,28 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
    */
   async run(): Promise<void> {
     const loop = (nowNanos: Timestamp) => {
-      if (!this.#paused) {
-        const input = this.#sampleInput();
-
+      const input = this.#sampleInput();
+      if (this.#paused) {
+        // Throttled GUI loop: while paused, still navigate + draw the pause menu at a reduced
+        // cadence. The game's `step` routes input to the menu (never the world); its signal can
+        // request `'resume'`, which returns authority to the engine via `#applyStepSignal`.
+        if (nowNanos - this.#lastGuiNanos >= GUI_INTERVAL_NS) {
+          this.#lastGuiNanos = nowNanos;
+          const signal = this.#game.step({
+            clock: this.#host,
+            dt: 0,
+            metrics: this.#simulation.metrics,
+            input,
+          });
+          this.#applyStepSignal(signal ?? 'continue');
+          const presentSignal = this.#present?.({
+            game: this.#game,
+            alpha: 0,
+            renderer: this.#renderer,
+          });
+          this.#applyPresentSignal(presentSignal ?? 'full');
+        }
+      } else {
         // Step at a throttled rate: `#stepScale` drops whole frames of simulation.
         if (this.#frameIndex % this.#stepScale === 0) {
           this.#applyStepSignal(this.#simulation.advance(nowNanos, input).signal);
