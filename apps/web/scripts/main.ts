@@ -21,18 +21,38 @@ import {
   Tetris,
 } from '@games/games';
 import { KeyboardSource } from '@games/input';
-import { BrowserHostLoop, Engine, type IGame, type PresentFrame } from '@games/loop';
+import {
+  BrowserHostLoop,
+  Engine,
+  getBrowserRefreshRate,
+  type IGame,
+  type PresentFrame,
+} from '@games/loop';
 import { Canvas2DRenderer, FrameBuilder, type IFrameBuilder, type IRenderer } from '@games/render';
 
 /** Logical canvas size, in device-independent pixels. */
-const WIDTH = 440;
-const HEIGHT = 520;
+const WIDTH = 720;
+const HEIGHT = 1024;
 
 /** Which game to run. */
 type GameId = 'tetris' | 'snake' | 'invaders';
 
+const GAMES = Object.freeze<GameId[]>([
+  'tetris', 'snake', 'invaders'
+])
+
 /** The game currently booted. Change this to run a different game. */
-const GAME: GameId = 'tetris';
+let loaded = {
+  selected: GAMES[0],
+  set selectedGame(value: string) {
+    const v = GAMES.find(g => g === value.toLowerCase())
+    if (v !== undefined && v === null) loaded.selected = v
+  },
+  get selectedGame(): GameId {
+    return this.selected
+  }
+  
+};
 
 /**
  * @summary The game instance and its key bindings, by id.
@@ -45,7 +65,7 @@ const GAME: GameId = 'tetris';
  * @return The game and a bindings map keyed by logical action.
  * @author MathAid
  */
-function selectGame(id: GameId): {
+function loadGame(id: GameId): {
   game: IGame<IFrameBuilder>;
   bindings: Record<string, readonly string[]>;
 } {
@@ -90,10 +110,12 @@ if (context === null) {
   throw new Error('Canvas 2D is not supported in this browser');
 }
 
+void bootstrap();
+
 const renderer = new Canvas2DRenderer(context);
 renderer.resize(WIDTH, HEIGHT);
 
-const { game, bindings } = selectGame(GAME);
+const { game, bindings } = loadGame(loaded.selectedGame);
 const keyboard = new KeyboardSource(bindings);
 
 /**
@@ -113,3 +135,132 @@ const engine = new Engine(game, { fps: 60 }, new BrowserHostLoop(), present);
 engine.setRenderer(renderer);
 void engine.attachInput(keyboard, 'keyboard');
 void engine.run();
+
+function bootstrap() {
+  // Setup framerate
+  getBrowserRefreshRate(200).then((rate) => {
+    const p = document.getElementById('refresh-rate') as HTMLParagraphElement;
+    p.textContent = `${rate} HZ.`;
+  });
+
+  // const select = document.getElementById('game-select') as HTMLSelectElement;
+  // select.onchange = (e) => (GAME = select.value as GameId);
+
+  configureSelect(g => loaded.selectedGame = g);
+}
+
+function configureSelect(onSelect: (id: GameId) => void) {
+  function constructDivOption(
+    iteration: number,
+    selectedDiv: HTMLDivElement,
+    consumeIteration: (i: number) => void,
+    optionEl: HTMLOptionElement,
+  ) {
+    function configureClick(this: HTMLDivElement) {
+      // Update original select value
+      consumeIteration(iteration);
+      selectedDiv.innerHTML = this.innerHTML;
+
+      // Highlight selected option
+      const sameAsSelected = itemsDiv.getElementsByClassName('same-as-selected');
+      for (let j = 0; j < sameAsSelected.length; j++) {
+        sameAsSelected[j].removeAttribute('class');
+      }
+      this.setAttribute('class', 'same-as-selected');
+
+      // Close dropdown
+      selectedDiv.click();
+    }
+
+    const optionDiv = document.createElement('div');
+    optionDiv.innerHTML = optionEl.innerHTML;
+
+    optionDiv.addEventListener('click', configureClick);
+
+    return optionDiv;
+  }
+
+  function populateDivOptions(selectEl: HTMLSelectElement, itemsDiv: HTMLDivElement) {
+    function consume(iteration: number) {
+      selectEl.selectedIndex = iteration;
+      onSelect(selectEl.value as GameId);
+    }
+    for (let i = 0; i < selectEl.length; i++) {
+      const option = selectEl.options[i];
+      itemsDiv.appendChild(
+        constructDivOption(
+          i,
+          selectedDiv,
+          consume,
+          option,
+        ),
+      );
+    }
+  }
+
+  function constructItemsListDiv(selectEl: HTMLSelectElement) {
+    const itemsDiv = document.createElement('div');
+    itemsDiv.setAttribute('class', 'select-items select-hide');
+
+    // Populate options from native <select>
+    populateDivOptions(selectEl, itemsDiv);
+
+    return itemsDiv;
+  }
+
+  function configureSelectDivToggle(selectedDiv: HTMLDivElement, itemsDiv: HTMLDivElement) {
+    function onDivClick(this: HTMLDivElement, e: PointerEvent) {
+      e.stopPropagation();
+      closeAllSelect(this);
+      itemsDiv.classList.toggle('select-hide');
+      this.classList.toggle('select-arrow-active');
+    }
+
+    selectedDiv.addEventListener('click', onDivClick);
+  }
+
+  function constructSelectDiv(selectEl: HTMLSelectElement) {
+    const selectedDiv = document.createElement('div');
+    selectedDiv.setAttribute('class', 'select-selected');
+    selectedDiv.innerHTML = selectEl.options[selectEl.selectedIndex].innerHTML;
+
+    return selectedDiv;
+  }
+
+  const customWrapper = document.querySelector('.custom-select-wrapper') as HTMLDivElement;
+  const selectEl = customWrapper.querySelector('select') as HTMLSelectElement;
+
+  // Create the selected display box
+  const selectedDiv = constructSelectDiv(selectEl);
+  customWrapper.appendChild(selectedDiv);
+
+  // Create options list container
+  const itemsDiv = constructItemsListDiv(selectEl);
+
+  customWrapper.appendChild(itemsDiv);
+
+  // Toggle dropdown open/close
+  configureSelectDivToggle(selectedDiv, itemsDiv);
+
+  // Close options if clicked anywhere outside
+  function closeAllSelect(element: HTMLElement | Event) {
+    const arrNo = [];
+    const items = document.getElementsByClassName('select-items');
+    const selected = document.getElementsByClassName('select-selected');
+
+    for (let i = 0; i < selected.length; i++) {
+      if (element == selected[i]) {
+        arrNo.push(i);
+      } else {
+        selected[i].classList.remove('select-arrow-active');
+      }
+    }
+    for (let i = 0; i < items.length; i++) {
+      if (arrNo.indexOf(i)) {
+        items[i].classList.add('select-hide');
+      }
+    }
+  }
+
+  document.addEventListener('click', closeAllSelect);
+}

@@ -17,3 +17,87 @@ canvas {
   background-color: rgb(170, 109, 109);
   border-radius: 5px;
 }
+
+/* Custom Dropdown Container */
+.custom-select-wrapper {
+  position: relative;
+  user-select: none;
+  width: 240px;
+}
+
+/* Hidden original select element (kept for form submission) */
+.custom-select-wrapper select {
+  display: none;
+}
+
+/* Selected Item / Header */
+.select-selected {
+  background-color: #3b3333;
+  color: #e6d7c3; /* Soft cream text */
+  padding: 12px 16px;
+  border: 1px solid #735d4d; /* Warm muted border */
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.2s ease-in-out;
+}
+
+/* Hover & Active state */
+.select-selected:hover,
+.select-selected.select-arrow-active {
+  border-color: #e2a049; /* Complementary warm amber highlight */
+  box-shadow: 0 0 8px rgba(226, 160, 73, 0.3);
+}
+
+/* Custom Arrow */
+.select-selected::after {
+  content: '';
+  width: 0;
+  height: 0;
+  border: 5px solid transparent;
+  border-color: #e2a049 transparent transparent transparent;
+  transition: transform 0.2s ease;
+}
+
+/* Arrow rotation when active */
+.select-selected.select-arrow-active::after {
+  transform: rotate(180deg);
+  margin-top: -5px;
+}
+
+/* Options Dropdown List */
+.select-items {
+  position: absolute;
+  background-color: #3b3333;
+  border: 1px solid #735d4d;
+  border-radius: 8px;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 99;
+  margin-top: 6px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Hide the items when the select box is closed */
+.select-hide {
+  display: none;
+}
+
+/* Option item styling */
+.select-items div {
+  color: #e6d7c3;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+/* Hover on option */
+.select-items div:hover,
+.same-as-selected {
+  background-color: #4a4040;
+  color: #e2a049; /* Gold/Amber active text */
+}

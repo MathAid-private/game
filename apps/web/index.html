@@ -3,11 +3,24 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>@games — Game Engine</title>
+    <title id="game-title">Game Engine</title>
     <link rel="stylesheet" href="./styles/main.css" />
   </head>
-  <body>
+  <body style="display: flex; flex-direction: col; align-items: center; justify-content: center">
+    <div style="display: flex; flex-direction: column; height: 100%">
+      <p id="refresh-rate" style="color: white"></p>
+      <div class="custom-select-wrapper">
+        <!-- Original Select Element -->
+        <select name="game" id="game-select">
+          <option value="">--Please choose an option--</option>
+          <option value="tetris">Tetris</option>
+          <option value="snake">Snake</option>
+          <option value="invaders">Space Invaders</option>
+        </select>
+      </div>
+    </div>
     <canvas id="game-2d"></canvas>
+    <p id="fps"></p>
     <script async type="module" src="./scripts/main.ts"></script>
   </body>
 </html>
