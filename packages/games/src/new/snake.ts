@@ -14,6 +14,7 @@
 import { Mulberry, type Color } from '@games/math';
 import type { IGame, IPresentationContext, ISimulationContext } from '@games/loop';
 import type { IFrameBuilder } from '@games/render';
+import type { IStatefulGame, Scene } from './scene';
 
 /** Grid width, in cells. */
 const COLS = 20;
@@ -106,7 +107,7 @@ function lerpColor(a: Color, b: Color, t: number): Color {
  * @see {@link IGame}
  * @author MathAid
  */
-export class Snake implements IGame<IFrameBuilder> {
+export class Snake implements IStatefulGame<IFrameBuilder> {
   readonly #moveSteps: number;
   readonly #rng: () => number;
   readonly #body: Cell[] = [];
@@ -134,6 +135,14 @@ export class Snake implements IGame<IFrameBuilder> {
       { col: startCol - 2, row: startRow },
     );
     this.#food = this.#spawnFood();
+  }
+
+  /**
+   * @summary The game's current scene.
+   * @author MathAid
+   */
+  get scene(): Scene {
+    return 'playing';
   }
 
   /**

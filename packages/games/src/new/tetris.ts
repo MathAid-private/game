@@ -16,6 +16,7 @@ import type { IGame, IPresentationContext, ISimulationContext } from '@games/loo
 import { Mulberry, type Color, type Rect } from '@games/math';
 import type { IFrameBuilder } from '@games/render';
 import { COLORS, PIECE_TYPES, SHAPES, rotate, type Mino, type PieceType } from './tetromino';
+import type { IStatefulGame, Scene } from './scene';
 
 /** Board width, in cells. */
 const COLS = 10;
@@ -117,7 +118,7 @@ interface ActivePiece {
  * @see {@link IGame}
  * @author MathAid
  */
-export class Tetris implements IGame<IFrameBuilder> {
+export class Tetris implements IStatefulGame<IFrameBuilder> {
   readonly #gravitySteps: number;
   readonly #bag: Bag;
   readonly #board: (Color | null)[][] = [];
@@ -143,6 +144,14 @@ export class Tetris implements IGame<IFrameBuilder> {
     this.#next = this.#spawn(this.#bag.next());
 
     this.#paused = false;
+  }
+
+  /**
+   * @summary The game's current scene.
+   * @author MathAid
+   */
+  get scene(): Scene {
+    return this.#paused ? 'paused' : 'playing';
   }
 
   /**

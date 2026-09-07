@@ -179,3 +179,7 @@ Landed on the transient `dev` branch (see `PROPOSALS.md` for the step-by-step pl
   (`fixed`/`variable`/`event-driven`). It renders a live metrics HUD (via the `metrics` event), a
   read-only key map, and re-`resize`s the canvas to the configured resolution; the game selector
   rewrites the query string and reloads.
+- **Game states (§8)** — `games/new/scene.ts` defines `Scene` (`'playing' | 'paused' |
+  'transitioning' | 'gameOver'`) and `IStatefulGame<F>` (an `IGame` plus a read-only `scene` and an
+  optional recursive `transition`). `Tetris`, `Snake`, and `SpaceInvaders` now implement
+  `IStatefulGame<IFrameBuilder>` and report their `scene`.
