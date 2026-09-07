@@ -162,7 +162,7 @@ export class SpaceInvaders implements IStatefulGame<IFrameBuilder> {
    * @author MathAid
    */
   get scene(): Scene {
-    return 'playing';
+    return this.#gameOver ? 'gameOver' : 'playing';
   }
 
   /**

@@ -181,9 +181,11 @@ Landed on the transient `dev` branch (see `PROPOSALS.md` for the step-by-step pl
   read-only key map, and re-`resize`s the canvas to the configured resolution; the game selector
   rewrites the query string and reloads.
 - **Game states (§8)** — `games/new/scene.ts` defines `Scene` (`'playing' | 'paused' |
-  'transitioning' | 'gameOver'`) and `IStatefulGame<F>` (an `IGame` plus a read-only `scene` and an
-  optional recursive `transition`). `Tetris`, `Snake`, and `SpaceInvaders` now implement
-  `IStatefulGame<IFrameBuilder>` and report their `scene`.
+  'transitioning' | 'gameOver'`), `IStatefulGame<F>` (an `IGame` plus a read-only `scene` and an
+  optional recursive `transition`), and `LevelTransition<F>` — a recursive level sequence that
+  hands off to the next level (itself a `LevelTransition`) when the current one reports
+  `gameOver`. `Tetris`, `Snake`, and `SpaceInvaders` implement `IStatefulGame<IFrameBuilder>` and
+  report their `scene` (Snake and Space Invaders now report `gameOver`).
 - **Tetris scoring + combo + metrics (§9.1–9.3)** — a pure, tested `scoreClear` in `tetris.ts`
   implements the four cumulative rules (single `+1`/`+0.05`, multi-line `L+1`/`+0.25`, full clean
   `L×2`/`+0.75`, deluxe cascade `+1,+2,…`/`+0.25` each). `Tetris` tracks score, a `[0,1]` combo

@@ -12,7 +12,13 @@
  * @author MathAid
  */
 
-import type { IGame } from '@games/loop';
+import type {
+  IGame,
+  IPresentationContext,
+  ISimulationContext,
+  PresentSignal,
+  StepSignal,
+} from '@games/loop';
 
 /**
  * @summary The lifecycle scene a game reports itself to be in.
@@ -54,4 +60,82 @@ export interface IStatefulGame<F = unknown> extends IGame<F> {
   readonly scene: Scene;
   /** The next game to hand off to (recursive), or `undefined` when none. */
   readonly transition?: IGame<F>;
+}
+
+/**
+ * @summary A recursive level sequence: plays each level and hands off to the next on `gameOver`.
+ *
+ * @description
+ * `LevelTransition<F>` wraps an ordered list of `IStatefulGame<F>` levels and drives them one at a
+ * time. When the current level reports `scene === 'gameOver'` it advances to the next; its own
+ * `transition` is the *remaining* levels wrapped in another `LevelTransition`, so the hand-off is
+ * recursive — a transition can wrap a game, and itself wrap another transition, indefinitely.
+ *
+ * @template F - The presentation output type, as in `IGame`.
+ *
+ * @example
+ * const campaign = new LevelTransition([new Tetris(1), new Tetris(2), new Tetris(3)]);
+ * // `campaign.transition` is a LevelTransition over levels 2–3, and so on.
+ *
+ * @see {@link IStatefulGame}
+ * @see {@link Scene}
+ * @author MathAid
+ */
+export class LevelTransition<F = unknown> implements IStatefulGame<F> {
+  readonly #levels: readonly IStatefulGame<F>[];
+  #index = 0;
+
+  /**
+   * @summary Construct a transition over an ordered level sequence.
+   * @param levels - The levels to play, in order (at least one).
+   * @throws {Error} If `levels` is empty.
+   * @author MathAid
+   */
+  constructor(levels: readonly IStatefulGame<F>[]) {
+    if (levels.length === 0) throw new Error('LevelTransition requires at least one level');
+    this.#levels = levels;
+  }
+
+  /**
+   * @summary The current level's scene, or `'gameOver'` after the last level finishes.
+   * @author MathAid
+   */
+  get scene(): Scene {
+    const current = this.#levels[this.#index];
+    return current === undefined ? 'gameOver' : current.scene;
+  }
+
+  /**
+   * @summary The remaining levels as another transition (recursive), or `undefined` when none.
+   * @author MathAid
+   */
+  get transition(): IGame<F> | undefined {
+    const remaining = this.#levels.slice(this.#index + 1);
+    return remaining.length > 0 ? new LevelTransition(remaining) : undefined;
+  }
+
+  /**
+   * @summary Step the current level, advancing to the next when it reports `gameOver`.
+   * @param context - The step context, forwarded to the current level.
+   * @return The current level's control signal (or `'continue'` after the sequence ends).
+   * @author MathAid
+   */
+  step(context: ISimulationContext): StepSignal | void {
+    const current = this.#levels[this.#index];
+    if (current === undefined) return 'continue';
+    const signal = current.step(context);
+    if (current.scene === 'gameOver') this.#index++;
+    return signal;
+  }
+
+  /**
+   * @summary Present the current level (or nothing after the sequence ends).
+   * @param context - The presentation context, forwarded to the current level.
+   * @return The current level's present signal, or `'none'` when done.
+   * @author MathAid
+   */
+  present(context: IPresentationContext<F>): PresentSignal | void {
+    const current = this.#levels[this.#index];
+    return current === undefined ? 'none' : current.present(context);
+  }
 }

@@ -203,7 +203,9 @@ export class Snake implements IStatefulGame<IFrameBuilder> {
    * @author MathAid
    */
   get scene(): Scene {
-    return this.#paused ? 'paused' : 'playing';
+    if (this.#paused) return 'paused';
+    if (this.#gameOver) return 'gameOver';
+    return 'playing';
   }
 
   /**
