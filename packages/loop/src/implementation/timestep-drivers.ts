@@ -12,7 +12,7 @@
  * @author MathAid
  */
 
-import { FPS_CACHE_CAPACITY } from '../const';
+import { FPS_CACHE_CAPACITY, MAX_CATCHUP_STEPS, SecondMetric } from '../const';
 import type {
   Alpha,
   IAudioSink,
@@ -22,6 +22,7 @@ import type {
   ISimulationDriver,
   Nanoseconds,
   StepResult,
+  StepSignal,
   Timestamp,
 } from '../types';
 import { NoopAudioSink } from '../audio/noop-audio-sink';
@@ -407,5 +408,177 @@ export class EventDrivenDriver<G extends IGame = IGame> implements ISimulationDr
     });
     this.#metrics.record(1, this.#lastNow);
     return { steps: 1, signal: signal ?? 'continue' };
+  }
+}
+
+/**
+ * @summary Weight of the newest frame-time sample in the exponential moving average.
+ * @author MathAid
+ */
+const EMA_SMOOTHING = 0.1;
+/**
+ * @summary Lower bound of the adaptive interval as a factor of the target interval.
+ * @author MathAid
+ */
+const MIN_INTERVAL_FACTOR = 0.25;
+/**
+ * @summary Upper bound of the adaptive interval as a factor of the target interval.
+ * @author MathAid
+ */
+const MAX_INTERVAL_FACTOR = 4;
+
+/**
+ * @summary A self-stabilising variable-timestep driver whose interval tracks the frame time.
+ *
+ * @description
+ * `AdaptiveTimestepDriver` is a variable-timestep strategy that keeps its step interval tracking
+ * an exponential moving average of the measured frame time, clamped to `[target/4, target×4]`.
+ * When frames slow down the interval grows (fewer, coarser steps); when they speed up it shrinks
+ * (finer steps) — so the simulation self-stabilises toward real time without the spike blow-ups of
+ * a raw variable timestep. Debt beyond the upper bound is discarded rather than replayed.
+ * `interpolation()` is `0` (state is already at the latest time).
+ *
+ * @template G - The concrete game type; defaults to `IGame`.
+ *
+ * @example
+ * const driver = new AdaptiveTimestepDriver(game, 60, host.now());
+ *
+ * @see {@link ISimulationDriver}
+ * @author MathAid
+ */
+export class AdaptiveTimestepDriver<G extends IGame = IGame> implements ISimulationDriver<G> {
+  readonly #metrics: PerformanceMetrics;
+  readonly #game: G;
+  readonly #timeClock: IClock;
+  readonly #target: number;
+  #interval: number;
+  #ema = 0;
+  #accumulator = 0;
+  #lastNow: Timestamp;
+  #lastDt = 0;
+  #audio: IAudioSink = NoopAudioSink.INSTANCE;
+
+  /**
+   * @summary Construct an adaptive driver.
+   * @param game - The game to step.
+   * @param fps - The target simulation rate (the interval's anchor).
+   * @param startNanos - Initial timestamp to anchor against, in nanoseconds.
+   * @param historyCapacity - Number of one-second metric windows to retain. Defaults to
+   *   `FPS_CACHE_CAPACITY`.
+   * @author MathAid
+   */
+  constructor(game: G, fps: number, startNanos: Timestamp, historyCapacity = FPS_CACHE_CAPACITY) {
+    this.#game = game;
+    this.#target = SecondMetric.NANOSECONDS / fps;
+    this.#interval = this.#target;
+    this.#lastNow = startNanos;
+    this.#timeClock = { now: () => this.#lastNow };
+    this.#metrics = new PerformanceMetrics(historyCapacity);
+  }
+
+  /**
+   * @summary Read-only performance metrics.
+   * @author MathAid
+   */
+  get metrics(): PerformanceMetrics {
+    return this.#metrics;
+  }
+
+  /**
+   * @summary The game being driven.
+   * @author MathAid
+   */
+  get game(): G {
+    return this.#game;
+  }
+
+  /**
+   * @summary The (adaptive) dt applied to the most recent step.
+   * @author MathAid
+   */
+  get lastDt(): Nanoseconds {
+    return this.#lastDt;
+  }
+
+  /**
+   * @summary Always `0` — the adaptive accumulator is exposed via `lastDt` instead.
+   * @author MathAid
+   */
+  get pendingSteps(): number {
+    return 0;
+  }
+
+  /**
+   * @summary The sub-frame interpolation factor — always `0`.
+   * @author MathAid
+   */
+  interpolation(): Alpha {
+    return 0;
+  }
+
+  /**
+   * @summary Re-anchor the clock and reset the accumulator and interval to the target.
+   * @param nowNanos - The timestamp to re-anchor against, in nanoseconds.
+   * @author MathAid
+   */
+  reset(nowNanos: Timestamp): void {
+    this.#lastNow = nowNanos;
+    this.#accumulator = 0;
+    this.#ema = 0;
+    this.#interval = this.#target;
+  }
+
+  /**
+   * @summary Bind the audio sink supplied to each step's context.
+   * @param sink - The sink game sound requests are forwarded to.
+   * @author MathAid
+   */
+  setAudio(sink: IAudioSink): void {
+    this.#audio = sink;
+  }
+
+  /**
+   * @summary Advance the simulation, tracking the frame time to adapt the step interval.
+   * @param nowNanos - Current monotonic timestamp, in nanoseconds.
+   * @param input - The input snapshot for this frame.
+   * @return The steps run plus the aggregate control signal.
+   * @author MathAid
+   */
+  advance(nowNanos: Timestamp, input: IInputState): StepResult {
+    const elapsed = nowNanos - this.#lastNow;
+    this.#lastNow = nowNanos;
+
+    // The interval tracks the smoothed frame time, clamped around the target rate.
+    this.#ema = this.#ema === 0 ? elapsed : this.#ema * (1 - EMA_SMOOTHING) + elapsed * EMA_SMOOTHING;
+    this.#interval = Math.min(
+      this.#target * MAX_INTERVAL_FACTOR,
+      Math.max(this.#target * MIN_INTERVAL_FACTOR, this.#ema),
+    );
+
+    this.#accumulator += elapsed;
+    let steps = 0;
+    let signal: StepSignal = 'continue';
+    while (this.#accumulator >= this.#interval && steps < MAX_CATCHUP_STEPS) {
+      this.#lastDt = this.#interval;
+      const stepSignal = this.#game.step({
+        clock: this.#timeClock,
+        dt: this.#interval,
+        metrics: this.#metrics,
+        input,
+        audio: this.#audio,
+      });
+      this.#accumulator -= this.#interval;
+      steps++;
+      if (stepSignal !== undefined && stepSignal !== 'continue') {
+        signal = stepSignal;
+        if (stepSignal === 'skip' || stepSignal === 'pause') break;
+      }
+    }
+
+    // Discard debt beyond the upper bound so a stall cannot replay as a burst.
+    if (this.#accumulator > this.#target * MAX_INTERVAL_FACTOR) this.#accumulator = 0;
+
+    this.#metrics.record(steps, nowNanos);
+    return { steps, signal };
   }
 }

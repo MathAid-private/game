@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { FixedTimestepDriver, NullInputState, SecondMetric, type IGame } from '@games/loop';
+import {
+  AdaptiveTimestepDriver,
+  FixedTimestepDriver,
+  NullInputState,
+  SecondMetric,
+  type IGame,
+} from '@games/loop';
 
 describe('FixedTimestepDriver', () => {
   it('runs one step per whole frame owed', () => {
@@ -55,5 +61,19 @@ describe('FixedTimestepDriver', () => {
     const run = driver.advance(SecondMetric.NANOSECONDS * 10, NullInputState.INSTANCE);
     expect(run.signal).toBe('skip');
     expect(steps).toBe(1);
+  });
+});
+
+describe('AdaptiveTimestepDriver', () => {
+  it('tracks the frame time and stays within the interval bounds', () => {
+    let steps = 0;
+    const game: IGame = { step: () => void steps++, present: () => {} };
+    const driver = new AdaptiveTimestepDriver(game, 60, 0);
+    const frame = SecondMetric.NANOSECONDS / 60;
+
+    for (let i = 1; i <= 120; i++) driver.advance(i * frame, NullInputState.INSTANCE);
+
+    expect(steps).toBeGreaterThanOrEqual(110);
+    expect(steps).toBeLessThanOrEqual(130);
   });
 });

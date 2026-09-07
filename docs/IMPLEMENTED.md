@@ -145,7 +145,8 @@ Landed on the transient `dev` branch (see `PROPOSALS.md` for the step-by-step pl
 - **Driver-agnostic simulation** (§1) — `ISimulationContext.clock` widened to `IClock` and `dt`
   added; `ISimulationDriver` gained `interpolation()`/`reset()` and dropped `clock`/`canStep`;
   `FixedTimestepDriver` re-anchored internally. New `timestep-drivers.ts`:
-  `VariableTimestepDriver`, `CappedVariableTimestepDriver`, `EventDrivenDriver`.
+  `VariableTimestepDriver`, `CappedVariableTimestepDriver`, `AdaptiveTimestepDriver` (interval
+  tracks a smoothed frame-time EMA, clamped to `[target/4, target×4]`), `EventDrivenDriver`.
 - **Control signals** (§4) — `StepSignal` (`'continue' | 'pause' | 'resume' | 'skip' | 'throttle'`)
   and `PresentSignal` (`'full' | 'reduced' | 'none'`) in `simulation.type.ts`; `step`/`present` may
   return them (a `void` return means `'continue'`/`'full'`). `ISimulationDriver.advance` now returns
