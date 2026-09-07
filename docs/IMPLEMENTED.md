@@ -1,0 +1,131 @@
+# Implemented — what has been shipped
+
+> **Author:** MathAid
+> **Status:** Living log of completed work. Update after every landed change.
+
+This document records everything that has been implemented and verified, as opposed to
+[`PROPOSALS.md`](./PROPOSALS.md) (planned work) and [`SHELVED.md`](./SHELVED.md) (deferred work).
+
+---
+
+## 1. Engine core — `@games/loop`
+
+**Contracts** (`src/types/`):
+
+- `clock.type.ts` — `Timestamp`, `Nanoseconds`, `IClock`, `IScheduleHandle`, `IScheduler`, `IHostLoop`.
+- `input.type.ts` — `InputAction`, `IInputState` (`isDown`/`wasPressed`/`wasReleased`), `IInputSource`.
+- `simulation.type.ts` — `Alpha`, `IFrameClock`, `FrameMetric`, `IPerformanceMetrics`,
+  `ISimulationContext`, `ISimulationStep`, `IPresentationContext`, `IPresentable`, `IGame<F>`,
+  `ISimulationDriver`, `IFrameDriver`.
+- `engine.type.ts` — `IEngineConfig`, `EngineEvents<R>`, `IEngine<G, R>`.
+- `event.type.ts` — `IEventEmitter<M>`, `EventHandler`, `EventPayload`, `Unsubscribe`.
+
+**Pure implementations** (`src/implementation/`):
+
+- `EventEmitter` (typed, composition-based; error aggregation on `emit`).
+- `ManualClock` (`IClock`), `ManualScheduler` (`IScheduler`).
+- `FrameClock` (`IFrameClock`) — fixed-timestep accumulator.
+- `PerformanceMetrics` (`IPerformanceMetrics`) — one-second step-count ring buffer.
+- `FixedTimestepDriver` (`ISimulationDriver`) — bounded catch-up (`MAX_CATCHUP_STEPS`).
+- `Engine` (`IEngine`) — composition root; lifecycle events, pause/resume with clock reset, input
+  registry, swappable renderer, optional `PresentFrame` glue.
+- `NullInputState`, `CompositeInputState` (`IInputState`).
+
+**Browser adapters** (`src/host/`):
+
+- `NanoClock` (`IClock` via `performance.now()`).
+- `rAFScheduler` (`IScheduler` via `requestAnimationFrame`).
+- `BrowserHostLoop` (`IHostLoop` composition).
+
+**Utilities** (`src/libs/`, `src/const/`):
+
+- `time.ts` — `nanoTime`, `toSeconds`/`toMilliseconds`/`toMicroseconds`/`toNanoseconds`.
+- `timing.ts` — `getBrowserRefreshRate`, `toHertz`/`toKiloHertz`/`toMegaHertz`/`toGigaHertz`.
+- `game.const.ts` — `SecondMetric`, `HertzMetric`, `DRAW_INTERVAL_NS`, `FPS_CACHE_CAPACITY`,
+  `MAX_CATCHUP_STEPS`.
+
+---
+
+## 2. Math — `@games/math`
+
+- `geometry/types.ts` — `Vec2`, `Point2D`, `Rect`, `Transform2D`, `Color`.
+- `geometry/aabb.ts` — `rectsIntersect`, `pointInRect` (half-open edge convention).
+- `bitwise/words.ts` — `pad`, `toBig`, `fromBig`, `and`, `or`, `xor`, `not`, `nand`, `nor`, `add`,
+  `subtract`, `multiply`, `divide`, `remainder`, `compare`, `bitLength`, `ones`, `onesFrom`,
+  `zeros`, `zerosFrom`, `abs`.
+- `bitwise/uint8.ts`, `bitwise/convert.ts` — byte/word big-endian arithmetic.
+- `random/rng.ts` — PRNG namespaces: `PCG`, `Mulberry` (mulberry32 + `mulberry32BigInt`),
+  `Xoshiro` (xoshiro256**), `SFC64`, `Wyrand`, `Squares`.
+
+---
+
+## 3. Render — `@games/render`
+
+- `command.ts` — `RenderCommand` union, `StrokeStyle`, `TextStyle`, `SpriteRef`.
+- `frame.ts` — `IFrame`, `IFrameBuilder`.
+- `renderer.ts` — `IRenderer`, `IRendererCapabilities`.
+- `frame-builder.ts` — `FrameBuilder` (implements both `IFrameBuilder` and `IFrame`).
+- `renderers/` — `Canvas2DRenderer` (command→Canvas2D translation), `NoopRenderer`,
+  `RecordingRenderer` (assertion sink).
+
+---
+
+## 4. Input — `@games/input`
+
+- `keyboard-source.ts` — `KeyboardSource` (action-mapped `KeyboardEvent.code` → `InputAction`,
+  one-shot press/release edges, auto-repeat ignored).
+
+---
+
+## 5. Games — `@games/games`
+
+- `Tetris` — 7-bag queue (seeded), 10×20 board, rotation, gravity, movement, soft/hard drop, line
+  clears, game-over reset; declarative rendering.
+- `Snake` — deque body, queued turns (no reversal), Xenzia wall wrap, food growth, self-collision
+  game over, head→tail colour gradient.
+- `SpaceInvaders` — flat entity list (5×11 invaders + bullets), marching formation with edge
+  reversal/descent, AABB collision, score/lives/game-over.
+
+Each is a pure `IGame<IFrameBuilder>` — deterministic for a seed, driven only by `step` context, and
+rendering only via `present` commands.
+
+---
+
+## 6. App host — `apps/web`
+
+- TypeScript Vite entry (`scripts/main.ts`) composing `BrowserHostLoop` + `Canvas2DRenderer` +
+  `KeyboardSource` + one of the three games + `Engine`, with a `GAME` selector.
+
+---
+
+## 7. Documentation
+
+- `README.md` (ASCII + Mermaid diagrams), `docs/PLAN.md`, `docs/ARCHITECTURE.md` (ASCII + Mermaid +
+  PlantUML), `docs/JSDOC.md` (the MathAid js-doc standard), `docs/DISTRIBUTION.md`,
+  `docs/PROPOSALS.md`.
+
+---
+
+## 8. Defects fixed
+
+- **`bitLength` bug** (`words.ts`) — used `Math.clz32` in 32-bit space, returning negative values;
+  rewritten as `|n|.toString(2).length`.
+- **`@/` alias in `rng.ts`** — changed to a relative `../bitwise/words` import so library consumers
+  resolve it without a bundler alias.
+- **Canvas stretching** — `apps/web/styles/main.css` stretched the element to the viewport aspect
+  ratio; now uses intrinsic `max-width`/`max-height` fit (see `PROPOSALS.md` §4).
+- **`IFrameDriver` orphan** — identified as an unreferenced contract (documented; removal pending a
+  decision on whether to wire it in).
+- **Stale doc references** — comments referencing deleted legacy types (`IGamePerformance`,
+  `DeltaAccumulator`, `GamePerformance`) corrected to `IEngine`/`Engine`.
+
+---
+
+## 9. Verification
+
+- **Type-check:** all five packages + the app pass `tsc --noEmit` (exit 0).
+- **Runtime (headless, deterministic):** the `Engine` loop (120 frames → 120 steps, `alpha ∈ [0,1)`),
+  Canvas2D command translation, `KeyboardSource` edges, Tetris (determinism/rotation/hard-drop),
+  Snake (wall-wrap/turn), Space Invaders (shooting/movement), and every PRNG (determinism + range).
+- **Vitest suite:** `vitest.config.ts` + 9 test files across `loop`/`math`/`render`/`games`
+  (written; run locally with `pnpm install && pnpm test`).

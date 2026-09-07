@@ -1,163 +1,118 @@
 # Implementation Proposals
 
-> **Status:** Proposal backlog — concrete designs for extending the engine. None of these are implemented yet.
 > **Author:** MathAid
+> **Status:** The forward work log. Each proposal below is a **detailed, step-by-step implementation
+> process**. Work that is already done lives in [`IMPLEMENTED.md`](./IMPLEMENTED.md); work that is
+> deliberately deferred lives in [`SHELVED.md`](./SHELVED.md).
+
+Proposals are grouped: engine, app host, then games.
 
 ---
 
-## 1. Driver-agnostic Engine (simulation step strategies)
+## 1. Engine — simulation step strategies
 
-### 1.1 The seam
+### 1.1 Goal
 
-The engine drives a game through one contract:
+Allow `Engine` to drive any stepping strategy, not just the fixed timestep. **Constraint:** only
+strategies that are *simulation stepping* belong here; strategies that do extra *scheduling* (e.g.
+`SplitHostLoop`) are shelved → [`SHELVED.md`](./SHELVED.md).
 
-```ts
-interface ISimulationDriver<G extends IGame = IGame> {
-  readonly clock: IFrameClock;
-  readonly metrics: IPerformanceMetrics;
-  readonly game: G;
-  advance(now: number, input: IInputState): number;
-  readonly canStep: boolean;
-}
-```
+### 1.2 Strategies to implement
 
-Only `FixedTimestepDriver` exists today, but this interface is the seam for any other "engine core".
-Every strategy below decides **how `dt` is derived** from nanosecond `now` samples and **how
-`game.step()` is invoked**.
+| Driver | `dt` derivation | Notes |
+|---|---|---|
+| `FixedTimestepDriver` | accumulate → whole steps of `1e9/fps` | **done** (`IMPLEMENTED.md`) |
+| `VariableTimestepDriver` | `dt = elapsed` per frame | non-deterministic, simplest |
+| `CappedVariableTimestepDriver` | `dt = min(elapsed, maxDt)` | avoids spike blow-ups |
+| `AdaptiveTimestepDriver` | interval adjusts to an error bound | self-stabilising |
+| `EventDrivenDriver` | steps only on discrete events | for turn-based/puzzle logic |
 
-### 1.2 Strategy taxonomy
+Presentation variants (interpolation vs extrapolation) are a render-side concern, addressed in §1.4.
 
-Strategies differ along three independent, mixable axes: step derivation, presentation, cadence.
+### 1.3 Step-by-step
 
-| Strategy | Derivation | Deterministic? | Notes |
-|---|---|---|---|
-| **Fixed timestep** *(current)* | accumulate elapsed → whole steps of `1e9/fps` | ✅ | stable; bounded catch-up; needs interpolation |
-| **Variable timestep** | one step/frame, `dt = elapsed` | ❌ | simplest; frame-rate dependent |
-| **Capped variable timestep** | `dt = min(elapsed, maxDt)` | ❌ | avoids worst spikes |
-| **Adaptive timestep** | interval adjusts to an error bound | ~ | self-stabilising; complex |
-| **Fixed + interpolation** | fixed steps, render `alpha ∈ [0,1)` | ✅ | what the engine does now |
-| **Fixed + extrapolation** | fixed steps, render *ahead* | ✅ | lower latency; can overshoot |
-| **Event-driven / turn-based** | `step()` on discrete events only | n/a | time never advances the sim |
-| **Split-rate** *(retired `SplitHostLoop`)* | physics fixed, render on rAF | ✅ | scheduling, not step, strategy |
-
-**Interpolation vs extrapolation** is the key presentation choice: interpolation blends previous↔current
-(smooth, one step behind); extrapolation predicts ahead (responsive, can overshoot).
-
-### 1.3 Current coupling
-
-The concrete `Engine` hardcodes the fixed strategy in four places, and the contracts assume it:
-
-```ts
-readonly #simulation: FixedTimestepDriver<G>;                                   // concrete type
-this.#simulation = new FixedTimestepDriver(game, config.fps, host.now(), ...);  // constructed inline
-this.#simulation.advance(nowNanos, input);                                      // called directly
-this.#present?.({ game, alpha: this.#simulation.clock.pending, renderer });     // alpha = pending steps
-```
-
-Deeper: `ISimulationDriver.clock: IFrameClock` and `canStep` are fixed concepts (`stepInterval`,
-`pending`, `consume`); `IEngineConfig.fps` assumes a fixed rate; `ISimulationContext` has **no `dt`**.
-
-### 1.4 Proposal: make `Engine` driver-agnostic
-
-1. **Inject the driver** — accept `ISimulationDriver<G>` (or a factory) instead of constructing it inline.
-2. **Put `dt` on the context** and widen `clock`:
+1. **Widen the base contract.** Move fixed-specific state out of `ISimulationDriver` so only
+   `advance(now, input)` and read-only views remain. `pending`, `canStep`, `stepInterval` move into
+   `FixedTimestepDriver`.
+2. **Add `dt` to the step context.**
    ```ts
    interface ISimulationContext {
-     readonly clock: IClock;     // was IFrameClock
-     readonly dt: Nanoseconds;   // NEW
+     readonly clock: IClock;        // was IFrameClock
+     readonly dt: Nanoseconds;      // NEW: this step's elapsed time
      readonly metrics: IPerformanceMetrics;
      readonly input: IInputState;
    }
    ```
-3. **Move fixed state into the fixed driver** — `pending`/`canStep`/`stepInterval` leave the base interface.
-4. **Decouple `alpha` from `pending`** — the driver exposes `interpolation(): Alpha` instead of the engine reading `clock.pending`.
-5. **Generalise config** — `fps` becomes a per-strategy option inside `IEngineConfig`.
+3. **Add a presentation accessor** so the engine asks the driver for `alpha` instead of reading
+   `clock.pending`:
+   ```ts
+   interface ISimulationDriver<G extends IGame = IGame> {
+     advance(now: number, input: IInputState): number;
+     interpolation(): Alpha;
+   }
+   ```
+4. **Inject the driver** into `Engine` (constructor param or factory) instead of constructing
+   `FixedTimestepDriver` inline.
+5. **Implement each driver.** For a variable driver, step once per frame with `dt = elapsed`; for a
+   capped one, clamp `dt`; for adaptive, adjust the interval toward a target error; for event-driven,
+   only call `step` when an external event signals it.
+6. **Generalise `IEngineConfig`.** Move `fps` into a per-strategy `simulation` options object.
+7. **Test.** Drive each driver with `ManualClock`/`ManualScheduler` and assert the expected step
+   count and `dt` values (determinism for fixed, `dt` propagation for variable).
 
-Result: adding a `VariableTimestepDriver` / `CappedVariableTimestepDriver` / `EventDrivenDriver` is a
-new `ISimulationDriver` with no change to engine, game, or host.
+**Acceptance:** `Engine.run()` accepts any `ISimulationDriver`; swapping drivers requires no change to
+games, host, or renderer.
+
+### 1.4 Presentation: interpolation vs extrapolation
+
+Keep the current interpolation (`alpha` in `[0,1)`). Add an optional **extrapolation** mode where the
+renderer draws the *predicted* next state (lower latency). This is a renderer/glue concern, not a
+driver concern; document it as a flag on the presentation context rather than a new driver.
 
 ---
 
-## 2. Pause — game-local scene + engine throttle
+## 2. Engine — dual pause interfaces (`IGame` + `IEngine`)
 
-### 2.1 Requirements
+### 2.1 Goal
 
-A correct pause must let the game, on its own, do all three:
+Two complementary pause mechanisms that serve **different purposes**, both retained:
 
-1. **Stall its presentation** — animations freeze; the world stops moving on screen.
-2. **Stop input reaching the simulation** — gameplay input (move, shoot, rotate) must not reach the
-   world/characters while paused.
-3. **Draw a pause screen and navigate it** — a menu the player can interact with.
+- **`IEngine.paused`** (existing, keep) — the *engine-level* halt: stops the fixed-timestep stepping,
+  discards pause debt on resume, emits `paused`/`resumed`. It is about the **loop cadence**.
+- **`IGame` pause** (new) — the *game-level* state: the game stops advancing its own world and (if it
+  wants) draws a pause menu. It is about the **game's scene**, independent of the loop.
 
-### 2.2 What the "overlay mode" phrasing gets wrong
+The game may *request* engine pause, but the two remain distinct.
 
-- **"Overlay" implies a second rendering layer** stacked on top of the game. There is no such layer:
-  the game's `present` already draws the *entire* frame. Drawing a pause screen is just a **branch in
-  `present`** — when the game is in its `paused` scene, draw the pause screen (a dimmed snapshot of the
-  world plus a menu) instead of the live world. No separate overlay object is needed.
-- **"Only starts running when paused" is backwards** — `present` runs every frame. The pause screen is
-  not a thing that "starts"; it is a state-dependent branch of the always-running `present`.
-- **It conflates two orthogonal concerns**: the game's *scene* (playing vs paused vs menu) and the
-  engine's *loop cadence* (full-rate fixed-timestep vs throttled GUI). These should be designed
-  separately.
-- **The "weaker repaint schedule" is an optimisation, not a requirement** — worth having, but it is
-  independent of the core pause behaviour. Wiring it into the core design over-complicates it.
+### 2.2 Step-by-step
 
-The requirements are actually satisfied by a **game-local state machine** (the earlier Option E),
-refined as follows.
+1. **Keep `IEngine.paused` as-is** (setter + `paused`/`resumed` events + clock reset).
+2. **Give `IGame` a pause signal.** Two equivalent shapes (choose one, or both):
+   - **Event** (matches the engine's emitter pattern): `IGame extends IEventEmitter<GameRequestEvents>`
+     with `pauseRequested`/`resumeRequested`; the game emits on its own scene transitions.
+   - **Return value** (pure, no shared emitter): `step()` returns a `StepSignal` (see §4) that carries
+     `{ kind: 'pause' }`.
+3. **The game halts `step` itself.** When in its `paused` scene, `step` routes input to the pause menu
+   (never the world) and does not advance simulation; `present` draws the pause screen.
+4. **Optionally draw the pause menu.** If `IGame` exposes a `present` that is *always* called (even
+   while the engine is paused), the game can render its own pause UI. This is the "may include an
+   interface for drawing the pause menu" option — see §2.3.
+5. **Wire the request to the engine.** The engine subscribes to the game's request and sets its own
+   `paused` (authority stays with the engine).
 
-### 2.3 The refined proposal: scene + request + throttle
+### 2.3 The "draw the pause menu" option
 
-**Part A — the game owns a scene.** A game-local `Scene` state machine:
-
-```ts
-type Scene = 'playing' | 'paused' | 'menu' | 'gameOver';
-```
-
-- `step(context)` branches on the scene:
-  - `playing` — advance the world; on a "pause" action → `scene = 'paused'` and emit `pauseRequested`.
-  - `paused` — route input to the **menu** (up/down/select), never to the world; on "resume" →
-    `scene = 'playing'` and emit `resumeRequested`.
-- `present(context)` branches on the scene:
-  - `playing` — draw the animated world.
-  - `paused` — draw the pause screen (a dimmed, non-animating world + the menu).
-
-This alone meets requirements 1–3 with **zero engine change** — it is purely game logic.
-
-**Part B — the engine owns the cadence.** The game *requests* pause/resume through the event channel
-(§2.4); the engine keeps authority over `paused`, its events, and the clock reset. When `paused`, the
-engine switches from the fixed-timestep loop to a **throttled GUI loop** (§2.5) so it does not burn a
-full 60 fixed steps per second on a static menu.
-
-### 2.4 The request channel (event, option D)
-
-`IGame` is an emitter of request events; the engine subscribes and owns the state (unchanged from the
-earlier event proposal):
+If the pause menu must be interactive, the engine's paused loop must still call `present` (and a
+lightweight `step`) at a reduced rate — the **throttled GUI loop**:
 
 ```ts
-type GameRequestEvents = { pauseRequested: void; resumeRequested: void; quitRequested: void };
-interface IGame<F = unknown> extends ISimulationStep, IPresentable<F>, IEventEmitter<GameRequestEvents> {}
-```
-
-The game emits `pauseRequested`/`resumeRequested` on scene transitions; the engine maps them to its
-`paused` setter and subscribes in the constructor, unsubscribing on `stop()`.
-
-### 2.5 The throttled paused loop
-
-When `paused`, the engine stops running `advance(now, input)` (no fixed steps, no simulation debt) and
-instead runs a reduced-rate GUI loop that still calls `present` (and one `step` for menu navigation):
-
-```ts
-const loop = (nowNanos: Timestamp) => {
+const loop = (nowNanos) => {
   const input = this.#sampleInput();
-  if (this.#paused) {
-    // GUI mode: render/navigate at a low rate, never advance the simulation
-    if (nowNanos - this.#lastGuiNanos >= GUI_INTERVAL_NS) {
-      this.#lastGuiNanos = nowNanos;
-      this.#game.step({ clock, dt: 0, metrics, input });   // menu navigation only
-      this.#present?.({ game, alpha: 0, renderer });
-    }
-  } else {
+  if (this.#paused && nowNanos - this.#lastGuiNanos >= GUI_INTERVAL_NS) {
+    this.#lastGuiNanos = nowNanos;
+    this.#game.step({ clock, dt: 0n, metrics, input }); // menu navigation only
+    this.#present?.({ game, alpha: 0, renderer });
+  } else if (!this.#paused) {
     this.#simulation.advance(nowNanos, input);
     this.#present?.({ game, alpha: this.#simulation.clock.pending, renderer });
   }
@@ -165,199 +120,320 @@ const loop = (nowNanos: Timestamp) => {
 };
 ```
 
-Throttling options, cheapest first:
+`GUI_INTERVAL_NS` is the "weaker repaint schedule": ~5–10 Hz is ample for a static menu.
 
-1. **Frame-skip** — keep the rAF loop but present only every N frames (e.g. every 12 ≈ 5 Hz).
-2. **Timer swap** — cancel rAF on pause and drive a `setTimeout(…, 200)` loop for the GUI, re-entering rAF on resume.
-3. **Dirty-flag** — repaint only when an input event changes the menu selection.
-
-`GUI_INTERVAL_NS` is the "weaker repaint schedule": the pause screen is static, so 5–10 Hz is ample and
-input lag is irrelevant there.
-
-**Summary of the split:** the game owns *what is shown and what input does* (its scene); the engine owns
-*how often the loop runs and whether the simulation advances* (its cadence). That is the clean division
-the requirements point at, and it absorbs Option E into the engine's event/authority model rather than
-leaving two disjoint pause states.
+**Acceptance:** the game can pause itself (stall world, ignore gameplay input, navigate a menu) while
+the engine remains the single authority over `paused` and its clock reset.
 
 ---
 
-## 3. IHost & multi-threading
+## 3. Engine — live metrics
 
-### 3.1 Where the responsibility lies
+### 3.1 Goal
 
-**Multi-threading is an `IHost` (host/transport) concern, not a simulation concern.** The simulation
-layer (`ISimulationDriver` + `IGame`) is pure logic — `advance(now, input)` runs `game.step()`
-deterministically — and must be **thread-agnostic**, never spawning threads. The *host* decides where the
-loops run (one thread, a worker, several workers) and how state crosses the boundary. The one requirement
-the host imposes back on the simulation is **portability**: the game state must be transferable
-(structured-clonable or `SharedArrayBuffer`-shared). The engine already satisfies this for rendering —
-`RenderCommand`/`IFrame` are plain serialisable data, so a worker can compute a frame and *transfer* it.
+Expose current-frame metrics (FPS, `alpha`, `dt`, steps) so the host can render them live.
 
-### 3.2 Proposal: multi-threaded `IHost` (web worker)
+### 3.2 Step-by-step
 
-- **Main thread** — render only: `rAFScheduler` → `renderer.render(frame)` on `Canvas2DRenderer`
-  (or an `OffscreenCanvas`); samples keyboard → `postMessage`s the `IInputState` to the worker.
-- **Worker thread** — simulation: `FixedTimestepDriver` + `game.step`, then `game.present` →
-  `FrameBuilder` → `postMessage` the `IFrame` back to the main thread.
-- **Handoff** — the `IFrame` is transferred (not copied) because `RenderCommand` is structured-clonable.
-  A `SharedArrayBuffer` holds the `alpha` if render interpolation must read it without a message round-trip.
-
-```ts
-// main.ts
-const worker = new Worker(new URL('./simulation.worker.ts', import.meta.url));
-worker.onmessage = ({ data }) => renderer.render(data);           // data: IFrame
-worker.postMessage(input);                                        // IInputState
-
-// simulation.worker.ts
-const driver = new FixedTimestepDriver(game, fps, /* start */);
-self.onmessage = ({ data: input }) => {
-  driver.advance(performance.now() * 1e6, input);
-  const frame = new FrameBuilder();
-  game.present({ alpha: driver.clock.pending, frame });
-  postMessage(frame);                                             // IFrame transfers to main
-};
-```
-
-### 3.3 Proposal: multi-threaded `IHost` (Node `worker_threads`)
-
-Identical shape using `worker_threads`: the `Worker` runs the simulation; the main thread orchestrates
-(or renders to a terminal/headless surface). `postMessage` carries the `IFrame`; `SharedArrayBuffer` +
-`Atomics` provide shared state when a zero-copy `alpha` is needed. The same `ISimulationDriver`/`IGame`
-run unchanged in both environments — only the host differs.
-
-### 3.4 Alternative `IHost` implementations
-
-**`ManualHostLoop`** — the deterministic test host, composed from the existing adapters:
-
-```ts
-class ManualHostLoop implements IHostLoop {
-  readonly clock = new ManualClock();
-  readonly scheduler = new ManualScheduler();
-  now(): Timestamp { return this.clock.now(); }
-  schedule(step: (now: Timestamp) => void): IScheduleHandle { return this.scheduler.schedule(step); }
-  cancel(handle: IScheduleHandle): void { this.scheduler.cancel(handle); }
-  /** Drive exactly one frame at the given time. */
-  tick(now: Timestamp): void { this.scheduler.tick(now); }
-  /** Move the clock forward (before a `tick`). */
-  advance(byNanos: Nanoseconds): void { this.clock.advance(byNanos); }
-}
-```
-
-A test drives `advance(frameNanos); tick(clock.now())` in a loop — exactly the deterministic harness the
-engine's tests use. Currently `ManualClock`/`ManualScheduler` are composed ad-hoc; this names the pair.
-
-**`NodeHostLoop`** — headless/server simulation (no rAF in Node):
-
-```ts
-class NodeHostLoop implements IHostLoop {
-  now(): Timestamp { return Math.trunc(performance.now() * 1e6); }
-  schedule(step: (now: Timestamp) => void): IScheduleHandle {
-    const ch = new MessageChannel();
-    ch.port1.onmessage = () => step(this.now());
-    ch.port2.postMessage(null);
-    return { token: ch };
-  }
-  cancel(handle: IScheduleHandle): void {
-    (handle.token as MessageChannel).port1.onmessage = null;
-    (handle.token as MessageChannel).port1.close();
-  }
-}
-```
-
-`MessageChannel` gives sub-millisecond wakeups (no `setTimeout` clamping), so the loop runs "as fast as
-the event loop drains" — the fixed-timestep accumulator keeps the simulation at the configured `fps`.
-Swap `MessageChannel` for `setInterval(…, intervalNanos)` if a throttled cadence is preferred.
-
-**`WorkerHostLoop`** — the multi-threaded host from §3.2/§3.3. It is the same `IHostLoop` shape, but
-`schedule`/`now` run on the worker side while `cancel`/frame handoff cross the `postMessage` boundary. It
-is the point where the engine's simulation portability (§3.1) becomes a live worker.
-
-**`ReplayHostLoop`** — deterministic playback for debugging/replay:
-
-```ts
-class ReplayHostLoop implements IHostLoop {
-  constructor(readonly frames: readonly Timestamp[]) {}
-  #i = 0;
-  now(): Timestamp { return this.frames[this.#i] ?? this.frames.at(-1)!; }
-  schedule(step: (now: Timestamp) => void): IScheduleHandle {
-    step(this.now());
-    this.#i = Math.min(this.#i + 1, this.frames.length - 1);
-    return { token: null };
-  }
-  cancel(_h: IScheduleHandle): void {}
-}
-```
-
-Feeding a recorded `Timestamp[]` reproduces a run bit-for-bit — the same determinism guarantee that makes
-`ManualHostLoop` testable, applied to a captured session.
-
-**`UnlockedHostLoop`** *(retired)* — the old "no vsync, run as fast as possible" host (a `MessageChannel`
-pump like `NodeHostLoop`). It was retired because it adds a second scheduler for no benefit to three 2D
-games; it remains the reference for a benchmark-oriented host.
-
----
-
-## 4. Rendering & resolution — stretched game content
-
-### 4.1 Problem statement
-
-The board and tetrominoes render **stretched**: the square cells appear as wide rectangles and the
-`I`-piece in the next queue is noticeably flattened. This is the visual signature of non-uniform scaling
-(along a single axis) on the Cartesian plane.
-
-**Root cause — the canvas's *display size* is out of proportion with its *drawing-buffer resolution*.**
-
-`main.ts` line 94 sets the drawing buffer correctly:
-
-```ts
-const WIDTH = 440, HEIGHT = 520;        // logical, portrait-ish aspect (440:520 ≈ 0.846:1)
-renderer.resize(WIDTH, HEIGHT);          // canvas.width = 440, canvas.height = 520
-```
-
-But `apps/web/styles/main.css` stretches the *element* to the viewport's aspect ratio:
-
-```css
-canvas { width: 90%; height: 90%; }
-```
-
-On a landscape viewport (≈16:9 ≈ 1.78:1) the element is displayed at ~1.78:1 while its content is
-~0.846:1, so the content is scaled ~2.1× along the horizontal axis — the stretching.
-
-**Why `renderer.resize` is *not* the bug:** `resize` only sets the drawing buffer (440×520). The
-distortion is introduced purely by the CSS display box, which ignores the buffer's aspect ratio.
-
-### 4.2 Possible solutions
-
-1. **Preserve the aspect ratio in CSS (recommended).** Let the canvas use its intrinsic size (the
-   `width`/`height` attributes set by `resize`) and scale it to fit the viewport, so landscape
-   viewports letterbox instead of stretch:
-
-   ```css
-   canvas {
-     display: block;
-     margin: 0 auto;
-     max-width: 100%;
-     max-height: 100%;
-     background-color: rgb(170, 109, 109);
-     border-radius: 5px;
+1. **Define a `LiveMetrics` snapshot.**
+   ```ts
+   interface LiveMetrics {
+     readonly fps: number;          // steps in the last closed second
+     readonly alpha: number;        // current interpolation factor
+     readonly dtNanos: number;      // last step interval
+     readonly pendingSteps: number; // accumulator remainder
+     readonly elapsedNanos: number; // since start
    }
    ```
+2. **The engine computes it each frame.** The `Engine` already owns `metrics` (`IPerformanceMetrics`
+   ring) and `clock`; add a `readonly live: LiveMetrics` getter (or a per-frame `metrics` event).
+3. **Emit a `metrics` event** (recommended for zero-polling HUDs): add `metrics: LiveMetrics` to
+   `EngineEvents`, emitted once per frame (throttle to `fps-reset` cadence if allocation matters).
+4. **Host consumes it.** The app subscribes to `metrics` and renders a HUD (see §8 app controls).
 
-   Because the canvas's intrinsic aspect is 440:520, `max-width`/`max-height` scale it down to fit
-   while preserving that ratio — no hard-coded ratio in CSS.
+**Acceptance:** a HUD can show FPS/alpha/dt/step count that updates in real time while the game plays.
 
-2. **Fixed display size matching the buffer.** `canvas { width: 440px; height: 520px; }` — exact, but
-   does not scale down to fit a small viewport.
+---
 
-3. **HiDPI-aware renderer + centred buffer.** Scale the drawing buffer by `devicePixelRatio`
-   (`canvas.width = WIDTH * dpr`) and the 2D context by `dpr`, so the buffer is crisp on a 2×/3×
-   display. This is the plan's Phase 2.3 "DPI / responsive canvas sizing" and also fixes the
-   blurriness that remains once stretching is removed. It is the most complete fix but more involved.
+## 4. Engine — `step`/`present` return values (control signals)
 
-**Related, not the same:** the fixed 440×520 buffer is *blurry* on a high-DPI display even after the
-stretching is fixed; option 3 addresses that.
+### 4.1 Goal
 
-### 4.3 Recommended action
+Let `IGame.step` and `IGame.present` return values that dictate how the engine/simulation/renderer
+invoke them — e.g. reduced stepping (frame dropping), skipped simulation (cut scene), or reduced
+rendering (non-in-game GUI). This integrates with the pause proposal (§2): a cut scene requests a
+throttle; a pause menu requests `present`-only.
 
-Apply option 1 now (a one-line CSS change) to remove the stretching; take option 3 for HiDPI crispness
-when the Phase 2.3 DPI work is picked up.
+### 4.2 Step-by-step
+
+1. **Define signal unions.**
+   ```ts
+   type StepSignal = 'continue' | 'pause' | 'resume' | 'skip' | 'throttle';
+   type PresentSignal = 'full' | 'reduced' | 'none';
+   ```
+2. **Change the contracts.**
+   ```ts
+   interface ISimulationStep { step(context: ISimulationContext): StepSignal; }
+   interface IPresentable<F = unknown> { present(context: IPresentationContext<F>): PresentSignal; }
+   ```
+   (Keep a default so games returning `void` still type-check — or migrate the three games to return
+   `'continue'`/`'full'`.)
+3. **Engine interprets `StepSignal`.**
+   - `continue` — run normally.
+   - `pause`/`resume` — set `this.paused` (authority stays with the engine).
+   - `skip` — stop stepping this frame (cut scene: no input, no world advance).
+   - `throttle` — halve the step rate (frame dropping).
+4. **Engine/renderer interpret `PresentSignal`.**
+   - `full` — render normally.
+   - `reduced` — render at a lower rate (skip N frames).
+   - `none` — skip rendering entirely.
+5. **Persist throttle state** in the engine (e.g. a `#stepScale`, `#renderScale`) so `throttle`/`reduced`
+   persist across frames until the game signals otherwise.
+6. **Test.** Assert that a game returning `'skip'` stops stepping, `'throttle'` halves steps, and
+   `'none'` stops the renderer being called.
+
+**Acceptance:** cut scenes and in-game GUI can drop frames/simulation without the game touching the
+loop, and pause reuses the same channel.
+
+---
+
+## 5. Engine — audio & visual sprites
+
+### 5.1 Goal
+
+Add audio playback and image sprites (png/gif/jpeg — no 3D).
+
+### 5.2 Audio — step-by-step
+
+1. **Define `IAudioSink`.**
+   ```ts
+   interface IAudioSink {
+     play(name: string, opts?: { volume?: number; loop?: boolean }): void;
+     stop(name: string): void;
+     setVolume(volume: number): void;
+   }
+   ```
+2. **Implement `WebAudioSink`** over the Web Audio API (an `AudioContext` + a registry of loaded
+   buffers). Load assets on `connect`; play/stop via buffer sources.
+3. **Attach to `IEngine`** as `setAudio(sink)` (mirroring `setRenderer`), and add `audio` to
+   `EngineEvents` (`audioStarted`/`audioStopped` if needed).
+4. **Games request audio** via a declarative channel (a `playSound('name')` call in `step`, or a
+   returned audio command) — never touching the Web Audio API directly.
+5. **Noop/Recording sinks** for tests, mirroring the renderers.
+
+### 5.3 Visual sprites — step-by-step
+
+1. **Define `SpriteRegistry`.** Maps `SpriteRef.id` → an `ImageBitmap`/`HTMLImageElement` (png/gif/jpeg).
+   ```ts
+   interface ISpriteRegistry {
+     load(id: string, source: string): Promise<void>;
+     get(id: string): ImageBitmap | undefined;
+   }
+   ```
+2. **`Canvas2DRenderer` draws sprites.** Resolve `RenderCommand { kind: 'sprite' }` through the
+   registry and `drawImage` at the transform (replacing the current magenta placeholder). Respect
+   `capabilities.images` (Noop/Recording report `false`).
+3. **Wire the registry** into the renderer (`renderer.setSprites(registry)`) or the engine.
+4. **Games declare sprite ids** in their `present` (`frame.sprite({ id: 'invader-a' }, transform)`).
+5. **Test.** `RecordingRenderer` still records `sprite` commands; `Canvas2DRenderer` with a mocked
+   registry draws the image at the right transform.
+
+**Acceptance:** a game can play sounds and draw png/gif/jpeg sprites without touching Web Audio or
+canvas image APIs.
+
+---
+
+## 6. Engine — host alternatives & generic `IScheduleHandle`
+
+### 6.1 Goal
+
+Ship the host alternatives and type the schedule handle's token.
+
+### 6.2 Step-by-step
+
+1. **Make the handle generic.**
+   ```ts
+   interface IScheduleHandle<T = unknown> {
+     readonly token: T;
+   }
+   interface IScheduler<T = unknown> {
+     schedule(step: (now: Timestamp) => void): IScheduleHandle<T>;
+     cancel(handle: IScheduleHandle<T>): void;
+   }
+   ```
+   Then `rAFScheduler` becomes `IScheduler<number>`, `NodeHostLoop` is `IScheduler<MessageChannel>`,
+   `ManualScheduler` is `IScheduler<null>` — no more untyped `unknown`.
+2. **Update existing schedulers** (`ManualScheduler`, `rAFScheduler`) to the generic signatures.
+3. **Implement the hosts** (details in `IMPLEMENTED.md` §6 / the §3 of the previous revision):
+   - `ManualHostLoop` (`ManualClock` + `ManualScheduler`) — test.
+   - `NodeHostLoop` (`performance.now` + `MessageChannel`) — headless/server.
+   - `WorkerHostLoop` — multi-threaded (web worker / `worker_threads`).
+   - `ReplayHostLoop` — deterministic `Timestamp[]` playback.
+4. **Test** each host against a `FixedTimestepDriver` for the expected step count.
+
+**Acceptance:** every `IHostLoop` is generic over its token type, and each host runs the same engine
+unchanged.
+
+---
+
+## 7. App — controls (`apps/web/scripts/main.ts`)
+
+### 7.1 Goal
+
+A control surface for the browser app: game selection, live metrics, host/simulator switching,
+resolution, key-map readout, FPS/history, and input name.
+
+### 7.2 Step-by-step
+
+1. **Model the settings.**
+   ```ts
+   interface AppSettings {
+     game: 'tetris' | 'snake' | 'invaders';
+     fps: number;
+     fpsHistory: number;
+     width: number;
+     height: number;
+     host: 'browser' | 'manual' | 'node' | 'replay';
+     simulator: 'fixed' | 'variable' | 'event-driven';
+     inputName: string;
+   }
+   ```
+2. **Source the settings** from URL query params (`?game=snake&fps=120&width=640…`) so a refresh
+   reconfigures the app without code edits. Fall back to defaults.
+3. **Wire `host` and `simulator`** through the `selectGame`/engine construction — instantiate the
+   chosen `IHostLoop` and `ISimulationDriver` (§1, §6) instead of hard-coding `BrowserHostLoop` +
+   `FixedTimestepDriver`.
+4. **Apply resolution** — pass `settings.width`/`settings.height` to `renderer.resize` (and, once §5
+   DPI work lands, scale by `devicePixelRatio`).
+5. **Render a metrics HUD** — subscribe to the engine `metrics` event (§3) and draw FPS/alpha/dt/step
+   count into a `<pre>`/canvas overlay.
+6. **Read-only key map** — render the current game's `bindings` map (action → codes) from
+   `selectGame` into a panel.
+7. **Input name** — pass `settings.inputName` to `engine.attachInput(keyboard, settings.inputName)`.
+8. **Expose controls** as a small settings panel (or keep it query-param only for now; a DOM form is a
+   later nicety).
+
+**Acceptance:** the same page can run any game at any resolution/FPS/host/simulator with a live HUD and
+a visible (read-only) key map.
+
+---
+
+## 8. Games — state abstraction on `IGame`
+
+### 8.1 Goal
+
+A composable state model on top of `IGame`: **Game** (pure simulation + render + audio),
+**Pause menu** (halts/slows physics and/or rendering, conditional repaint), and **Level transitions**
+(recursive — a transition can wrap a game, a pause menu, or another transition).
+
+### 8.2 Step-by-step
+
+1. **Define a `GameState`/`Scene` contract** (directly on `IGame` or a sub-interface).
+   ```ts
+   type Scene = 'playing' | 'paused' | 'transitioning' | 'gameOver';
+   interface IGame<F = unknown> extends ISimulationStep, IPresentable<F> {
+     readonly scene: Scene;
+     readonly transition?: IGame<F>;  // recursive: the next/deferred game
+   }
+   ```
+2. **Route `step`/`present` by scene** in each game: `playing` → world; `paused` → menu input + static
+   UI; `transitioning` → advance a transition timeline and swap to `transition` when done.
+3. **Make transitions recursive** — a `transition` may itself have a `transition`, enabling
+   `game → gameOver → nextLevel → …` chains.
+4. **Bi-directional communication** — the game emits `pauseRequested`/`transitionRequested` (or returns
+   a `StepSignal`), and the engine replies by throttling (§2, §4); this is the concrete form of the
+   "bi-directional" note.
+5. **Conditional repaint** — a paused/transition scene returns `PresentSignal = 'reduced'` (§4) so the
+   engine drops frames.
+
+**Acceptance:** any game can express `playing → paused → gameOver → (recursive) transition` without the
+engine knowing the specific scenes.
+
+---
+
+## 9. Games — Tetris: scoring, combo, pause menu, metrics
+
+### 9.1 Scoring rules (cumulative — bullets can stack in one lock)
+
+1. **Line cleared:** `+1` point per line, `+0.05` combo.
+2. **Multi-line lock:** `+1` stacking on the base for each line — e.g. an `I` clearing 4 rows scores
+   `4 + 1 = 5`, `+0.25` combo.
+3. **Deluxe clear (cascade):** clearing continues after lock, delaying spawn; each successive clearing
+   adds an *incrementing* stacking bonus (`+1`, `+2`, `+3`, …), `+0.25` combo each.
+4. **Full clean:** `3+` lines and an empty board → `×2` on the base (3 rows → `3 × 2 = 6`), `+0.75`
+   combo.
+
+### 9.2 Combo meter
+
+- Range `[0, 1]`, clamped at both ends.
+- **Add** on line clears per §9.1.
+- **Subtract** `0.001` per tetromino fall tick.
+
+### 9.3 Metrics
+
+- Deluxe points — current, all-time high.
+- Total points — current, all-time high.
+- Combo meter.
+- Board clear count — current, all-time high.
+
+### 9.4 Pause menu
+
+Configure tetromino colours, choose RNG, seed, game speed, volume, and the key map (read + write).
+
+### 9.5 Step-by-step
+
+1. **Add a `score`/`combo`/`deluxe` model** to `Tetris` (plain fields, persisted across a session).
+2. **Hook scoring into `#lock`/`#clearLines`** — compute `lines`, detect multi-line, cascade (deluxe),
+   and full-clean, then apply the cumulative formula and update the combo meter (clamped).
+3. **Decay the combo** in `step` (subtract `0.001` per fall tick).
+4. **Expose metrics** via a read-only `Tetris.metrics` object (or a `metrics` event) for the HUD (§7).
+5. **Add a `pause` scene** (§8) with a settings model: colours, RNG choice (`Mulberry`/`PCG`/…), seed,
+   speed, volume, key map. Persist settings through a `Settings` object the game owns.
+6. **Apply settings** on resume (rebuild the bag with the chosen RNG+seed, remap keys, set speed).
+7. **Render** score/combo/board-clear in `present` (and the pause menu when paused).
+
+**Acceptance:** all four scoring rules stack correctly, the combo meter is clamped and decays per
+tick, and the pause menu edits colours/RNG/seed/speed/volume/keys that take effect on resume.
+
+---
+
+## 10. Games — Snake: pause menu
+
+### 10.1 Goal
+
+A Snake pause menu with sprite toggling, stage configuration, colour configuration, and mode
+selection. (Core Snake rules remain TBD.)
+
+### 10.2 Step-by-step
+
+1. **Add a `pause` scene** (§8) to `Snake`.
+2. **Settings model:**
+   - `sprites` — toggle between rect rendering and sprite rendering (§5).
+   - `stage` — background colour, border colour, obstacle placement (a list of `Cell`s).
+   - `snakeColor` / `eggColor` — per-segment and food colours.
+   - `mode` — `'arcade'` (endless, speed ramps) | `'level'` (a defined sequence of stages).
+3. **Apply on resume** — rebuild the board colours, place obstacles, switch colour scheme, and select
+   the movement/level logic by mode.
+4. **Render** the pause menu (and the stage colours) in `present`.
+
+**Acceptance:** toggling sprites, colours, obstacles, and mode from the pause menu takes effect on
+resume, and the mode switch changes game behaviour.
+
+---
+
+## 11. Games — Space Invaders
+
+**TBD** — no rules specified yet. The existing entity/collision model (`IMPLEMENTED.md` §5) is the
+foundation; rules and a pause menu will be spec'd when requirements are provided.
+
+---
+
+## 12. Cross-cutting: HiDPI / responsive buffer
+
+(Remaining from the now-fixed stretching issue — `IMPLEMENTED.md` §8.) Scale the drawing buffer by
+`devicePixelRatio` and the 2D context by `dpr` so the 440×520 logical canvas renders crisply on 2×/3×
+displays. Depends on the renderer's `resize` (currently fixed resolution).
+
+**Step-by-step:** (1) `Canvas2DRenderer.resize` multiplies `canvas.width/height` by `dpr` and calls
+`ctx.scale(dpr, dpr)`; (2) `main.ts` passes the logical resolution and the renderer computes the
+physical size; (3) CSS keeps the intrinsic `max-width/max-height` fit (§ of `IMPLEMENTED.md`).
