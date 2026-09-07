@@ -48,6 +48,7 @@ export const TETRIS_ACTIONS = {
   rotate: 'rotate',
   softDrop: 'soft-drop',
   hardDrop: 'hard-drop',
+  pause: 'pause',
 } as const;
 
 /**
@@ -125,6 +126,8 @@ export class Tetris implements IGame<IFrameBuilder> {
   #stepCounter = 0;
   #linesCleared = 0;
 
+  #paused: boolean;
+
   /**
    * @summary Construct a Tetris game.
    * @param seed - Seed for the deterministic piece queue. Defaults to `1`.
@@ -137,6 +140,8 @@ export class Tetris implements IGame<IFrameBuilder> {
     for (let row = 0; row < ROWS; row++) this.#board.push(new Array<Color | null>(COLS).fill(null));
     this.#current = this.#spawn(this.#bag.next());
     this.#next = this.#spawn(this.#bag.next());
+
+    this.#paused = false;
   }
 
   /**
@@ -146,18 +151,21 @@ export class Tetris implements IGame<IFrameBuilder> {
    */
   step(context: ISimulationContext): void {
     const input = context.input;
-    if (input.wasPressed(TETRIS_ACTIONS.rotate)) this.#rotate();
-    if (input.wasPressed(TETRIS_ACTIONS.moveLeft)) this.#move(-1);
-    if (input.wasPressed(TETRIS_ACTIONS.moveRight)) this.#move(1);
-    if (input.wasPressed(TETRIS_ACTIONS.hardDrop)) this.#hardDrop();
+    if (input.wasPressed(TETRIS_ACTIONS.pause)) this.#pause();
+    if (!this.#paused) {
+      if (input.wasPressed(TETRIS_ACTIONS.rotate)) this.#rotate();
+      if (input.wasPressed(TETRIS_ACTIONS.moveLeft)) this.#move(-1);
+      if (input.wasPressed(TETRIS_ACTIONS.moveRight)) this.#move(1);
+      if (input.wasPressed(TETRIS_ACTIONS.hardDrop)) this.#hardDrop();
 
-    this.#stepCounter++;
-    const interval = input.isDown(TETRIS_ACTIONS.softDrop)
-      ? Math.max(1, Math.floor(this.#gravitySteps / 4))
-      : this.#gravitySteps;
-    if (this.#stepCounter >= interval) {
-      this.#stepCounter = 0;
-      this.#fall();
+      this.#stepCounter++;
+      const interval = input.isDown(TETRIS_ACTIONS.softDrop)
+        ? Math.max(1, Math.floor(this.#gravitySteps / 4))
+        : this.#gravitySteps;
+      if (this.#stepCounter >= interval) {
+        this.#stepCounter = 0;
+        this.#fall();
+      }
     }
   }
 
@@ -228,6 +236,10 @@ export class Tetris implements IGame<IFrameBuilder> {
    */
   #spawn(type: PieceType): ActivePiece {
     return { type, cells: SHAPES[type].map((m) => ({ col: m.col + 3, row: m.row - 1 })) };
+  }
+
+  #pause() {
+    this.#paused = !this.#paused
   }
 
   /**

@@ -32,7 +32,7 @@ const HEIGHT = 520;
 type GameId = 'tetris' | 'snake' | 'invaders';
 
 /** The game currently booted. Change this to run a different game. */
-const GAME: GameId = 'invaders';
+const GAME: GameId = 'tetris';
 
 /**
  * @summary The game instance and its key bindings, by id.
@@ -59,6 +59,7 @@ function selectGame(id: GameId): {
           [TETRIS_ACTIONS.rotate]: ['ArrowUp', 'KeyW'],
           [TETRIS_ACTIONS.softDrop]: ['ArrowDown', 'KeyS'],
           [TETRIS_ACTIONS.hardDrop]: ['Space'],
+          [TETRIS_ACTIONS.pause]: ['Escape'],
         },
       };
     case 'snake':

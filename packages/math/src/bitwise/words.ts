@@ -519,8 +519,14 @@ export function compare(a: readonly number[], b: readonly number[]): -1 | 0 | 1 
  * @author MathAid
  */
 export function bitLength(n: bigint): number {
-  const x = n < 0n ? -n : n;
-  return x === 0n ? 0 : x.toString(2).length;
+  if (n < 0n) n = -n;
+  if (n === 0n) return 0;
+  let len = 0;
+  while (n > 0n) {
+    n >>= 1n;
+    len++;
+  }
+  return len;
 }
 
 /**

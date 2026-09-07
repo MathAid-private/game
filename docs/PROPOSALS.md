@@ -294,3 +294,70 @@ Feeding a recorded `Timestamp[]` reproduces a run bit-for-bit — the same deter
 **`UnlockedHostLoop`** *(retired)* — the old "no vsync, run as fast as possible" host (a `MessageChannel`
 pump like `NodeHostLoop`). It was retired because it adds a second scheduler for no benefit to three 2D
 games; it remains the reference for a benchmark-oriented host.
+
+---
+
+## 4. Rendering & resolution — stretched game content
+
+### 4.1 Problem statement
+
+The board and tetrominoes render **stretched**: the square cells appear as wide rectangles and the
+`I`-piece in the next queue is noticeably flattened. This is the visual signature of non-uniform scaling
+(along a single axis) on the Cartesian plane.
+
+**Root cause — the canvas's *display size* is out of proportion with its *drawing-buffer resolution*.**
+
+`main.ts` line 94 sets the drawing buffer correctly:
+
+```ts
+const WIDTH = 440, HEIGHT = 520;        // logical, portrait-ish aspect (440:520 ≈ 0.846:1)
+renderer.resize(WIDTH, HEIGHT);          // canvas.width = 440, canvas.height = 520
+```
+
+But `apps/web/styles/main.css` stretches the *element* to the viewport's aspect ratio:
+
+```css
+canvas { width: 90%; height: 90%; }
+```
+
+On a landscape viewport (≈16:9 ≈ 1.78:1) the element is displayed at ~1.78:1 while its content is
+~0.846:1, so the content is scaled ~2.1× along the horizontal axis — the stretching.
+
+**Why `renderer.resize` is *not* the bug:** `resize` only sets the drawing buffer (440×520). The
+distortion is introduced purely by the CSS display box, which ignores the buffer's aspect ratio.
+
+### 4.2 Possible solutions
+
+1. **Preserve the aspect ratio in CSS (recommended).** Let the canvas use its intrinsic size (the
+   `width`/`height` attributes set by `resize`) and scale it to fit the viewport, so landscape
+   viewports letterbox instead of stretch:
+
+   ```css
+   canvas {
+     display: block;
+     margin: 0 auto;
+     max-width: 100%;
+     max-height: 100%;
+     background-color: rgb(170, 109, 109);
+     border-radius: 5px;
+   }
+   ```
+
+   Because the canvas's intrinsic aspect is 440:520, `max-width`/`max-height` scale it down to fit
+   while preserving that ratio — no hard-coded ratio in CSS.
+
+2. **Fixed display size matching the buffer.** `canvas { width: 440px; height: 520px; }` — exact, but
+   does not scale down to fit a small viewport.
+
+3. **HiDPI-aware renderer + centred buffer.** Scale the drawing buffer by `devicePixelRatio`
+   (`canvas.width = WIDTH * dpr`) and the 2D context by `dpr`, so the buffer is crisp on a 2×/3×
+   display. This is the plan's Phase 2.3 "DPI / responsive canvas sizing" and also fixes the
+   blurriness that remains once stretching is removed. It is the most complete fix but more involved.
+
+**Related, not the same:** the fixed 440×520 buffer is *blurry* on a high-DPI display even after the
+stretching is fixed; option 3 addresses that.
+
+### 4.3 Recommended action
+
+Apply option 1 now (a one-line CSS change) to remove the stretching; take option 3 for HiDPI crispness
+when the Phase 2.3 DPI work is picked up.
