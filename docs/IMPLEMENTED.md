@@ -118,6 +118,9 @@ rendering only via `present` commands.
   decision on whether to wire it in).
 - **Stale doc references** — comments referencing deleted legacy types (`IGamePerformance`,
   `DeltaAccumulator`, `GamePerformance`) corrected to `IEngine`/`Engine`.
+- **Loop rescheduling after `stop()`** — an in-flight `MessageChannel` delivery could fire after
+  `stop()`, and the loop unconditionally rescheduled, reviving the loop and hanging the process.
+  Added a `#running` guard so the loop only reschedules while running.
 
 ---
 
@@ -158,3 +161,8 @@ Landed on the transient `dev` branch (see `PROPOSALS.md` for the step-by-step pl
   `simulation.type.ts`; `ISimulationDriver` gained `lastDt`/`pendingSteps` accessors (all four
   drivers implement them). `Engine` exposes a `live` getter and emits a per-frame `metrics` event
   (`EngineEvents.metrics`) for zero-polling HUDs.
+- **Host alternatives (§6.3)** — `host/manual-host-loop.ts` (`ManualHostLoop`, `IHostLoop<null>`),
+  `host/message-channel-scheduler.ts` (`MessageChannelScheduler`, `IScheduler<MessageChannel>`),
+  `host/node-host-loop.ts` (`NodeHostLoop`, `IHostLoop<MessageChannel>`), `host/replay-host-loop.ts`
+  (`ReplayHostLoop`, `IHostLoop<number>`, synchronous `Timestamp[]` playback), and
+  `host/worker-host-loop.ts` (`WorkerHostLoop`, a worker-oriented alias of `NodeHostLoop`).

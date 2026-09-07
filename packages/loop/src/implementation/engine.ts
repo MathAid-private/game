@@ -104,6 +104,7 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
   readonly #inputs = new Map<string, IInputSource>();
   #renderer: R | null = null;
   #paused = false;
+  #running = false;
   #stepScale = 1;
   #renderScale = 1;
   #frameIndex = 0;
@@ -300,9 +301,13 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
       }
       this.#emitter.emit('metrics', this.#liveAt(nowNanos));
       this.#frameIndex++;
-      this.#handle = this.#host.schedule(loop);
+      // Guard against an in-flight delivery firing after `stop()`: only reschedule while running.
+      if (this.#running) {
+        this.#handle = this.#host.schedule(loop);
+      }
     };
 
+    this.#running = true;
     this.#startNanos = this.#host.now();
     this.#handle = this.#host.schedule(loop);
     this.#emitter.emit('started');
@@ -357,6 +362,7 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
    * @author MathAid
    */
   async stop(): Promise<void> {
+    this.#running = false;
     if (this.#handle === null) return;
     this.#host.cancel(this.#handle);
     this.#handle = null;
