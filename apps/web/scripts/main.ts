@@ -1,13 +1,16 @@
 /**
  * @fileoverview
- * @summary The browser host — wires the engine, a renderer, input, and any game together.
+ * @summary The browser host — wires the engine, renderer, input, audio, and any game together.
  *
  * @description
- * This entry point is the composition root for the running application: it creates a
- * `Canvas2DRenderer`, a `KeyboardSource`, one of the three games, and an `Engine` on a
- * `BrowserHostLoop`. Because every game implements the same `IGame<IFrameBuilder>` contract,
- * swapping `GAME` below changes the whole experience without touching the engine, the renderer,
- * or the loop — the decoupling the engine exists to demonstrate.
+ * This entry point is the composition root for the running application, and it is also the app's
+ * control surface: every setting (game, fps, resolution, host, simulator, input name) is read
+ * from the URL query string, so a refresh reconfigures the whole app without a code edit. It
+ * builds the chosen `IHostLoop` and `ISimulationDriver`, binds a `Canvas2DRenderer` + sprite
+ * registry, attaches a keyboard source under a named input, subscribes to the engine's `metrics`
+ * event for a live HUD, and renders the game's read-only key map. Because every game implements
+ * the same `IGame<IFrameBuilder>` contract and every host/driver the same loop/driver contracts,
+ * swapping any of them changes the experience without touching the engine core.
  *
  * @author MathAid
  */
@@ -24,35 +27,94 @@ import { KeyboardSource } from '@games/input';
 import {
   BrowserHostLoop,
   Engine,
+  EventDrivenDriver,
+  FixedTimestepDriver,
+  ManualHostLoop,
+  NodeHostLoop,
+  ReplayHostLoop,
+  SecondMetric,
+  VariableTimestepDriver,
   getBrowserRefreshRate,
   type IGame,
+  type IHostLoop,
+  type ISimulationDriver,
   type PresentFrame,
 } from '@games/loop';
-import { Canvas2DRenderer, FrameBuilder, type IFrameBuilder, type IRenderer } from '@games/render';
-
-/** Logical canvas size, in device-independent pixels. */
-const WIDTH = 720;
-const HEIGHT = 1024;
+import {
+  Canvas2DRenderer,
+  FrameBuilder,
+  SpriteRegistry,
+  type IFrameBuilder,
+  type IRenderer,
+} from '@games/render';
 
 /** Which game to run. */
 type GameId = 'tetris' | 'snake' | 'invaders';
+/** Which loop host to drive the engine with. */
+type HostId = 'browser' | 'manual' | 'node' | 'replay';
+/** Which simulation stepping strategy to use. */
+type SimulatorId = 'fixed' | 'variable' | 'event-driven';
 
-const GAMES = Object.freeze<GameId[]>([
-  'tetris', 'snake', 'invaders'
-])
+/**
+ * @summary The app's serialisable configuration, sourced from the URL query string.
+ * @author MathAid
+ */
+interface AppSettings {
+  readonly game: GameId;
+  readonly fps: number;
+  readonly fpsHistory: number;
+  readonly width: number;
+  readonly height: number;
+  readonly host: HostId;
+  readonly simulator: SimulatorId;
+  readonly inputName: string;
+}
 
-/** The game currently booted. Change this to run a different game. */
-let loaded = {
-  selected: GAMES[0],
-  set selectedGame(value: string) {
-    const v = GAMES.find(g => g === value.toLowerCase())
-    if (v !== undefined && v === null) loaded.selected = v
-  },
-  get selectedGame(): GameId {
-    return this.selected
-  }
-  
+/** Fallback settings when a query parameter is absent or invalid. */
+const DEFAULT_SETTINGS: AppSettings = {
+  game: 'tetris',
+  fps: 60,
+  fpsHistory: 60,
+  width: 720,
+  height: 1024,
+  host: 'browser',
+  simulator: 'fixed',
+  inputName: 'keyboard',
 };
+
+/**
+ * @summary Parse app settings from the URL query string, falling back to defaults.
+ * @return The effective settings.
+ * @author MathAid
+ */
+function readSettings(): AppSettings {
+  const params = new URLSearchParams(window.location.search);
+  const gameParam = params.get('game');
+  const hostParam = params.get('host');
+  const simParam = params.get('simulator');
+
+  const game: GameId =
+    gameParam === 'snake' || gameParam === 'invaders' || gameParam === 'tetris'
+      ? gameParam
+      : DEFAULT_SETTINGS.game;
+  const host: HostId =
+    hostParam === 'manual' || hostParam === 'node' || hostParam === 'replay'
+      ? hostParam
+      : DEFAULT_SETTINGS.host;
+  const simulator: SimulatorId =
+    simParam === 'variable' || simParam === 'event-driven' ? simParam : DEFAULT_SETTINGS.simulator;
+
+  return {
+    game,
+    host,
+    simulator,
+    fps: Number.parseFloat(params.get('fps') ?? '') || DEFAULT_SETTINGS.fps,
+    fpsHistory: Number.parseInt(params.get('fpsHistory') ?? '', 10) || DEFAULT_SETTINGS.fpsHistory,
+    width: Number.parseInt(params.get('width') ?? '', 10) || DEFAULT_SETTINGS.width,
+    height: Number.parseInt(params.get('height') ?? '', 10) || DEFAULT_SETTINGS.height,
+    inputName: params.get('inputName') ?? DEFAULT_SETTINGS.inputName,
+  };
+}
 
 /**
  * @summary The game instance and its key bindings, by id.
@@ -104,22 +166,74 @@ function loadGame(id: GameId): {
   }
 }
 
+/**
+ * @summary Build the chosen loop host.
+ * @param id - The host id from settings.
+ * @return An `IHostLoop` the engine drives.
+ * @author MathAid
+ */
+function buildHost(id: HostId): IHostLoop {
+  switch (id) {
+    case 'node':
+      return new NodeHostLoop();
+    case 'manual':
+      return new ManualHostLoop();
+    case 'replay': {
+      // Two seconds of 60 Hz timestamps: a deterministic, self-terminating playback.
+      const frame = SecondMetric.NANOSECONDS / 60;
+      return new ReplayHostLoop(Array.from({ length: 120 }, (_, i) => (i + 1) * frame));
+    }
+    default:
+      return new BrowserHostLoop();
+  }
+}
+
+/**
+ * @summary Build the chosen simulation driver.
+ * @param id - The simulator id from settings.
+ * @param game - The game to step.
+ * @param fps - The fixed rate (used only by the fixed driver).
+ * @param fpsHistory - Number of one-second metric windows to retain.
+ * @param startNanos - The initial anchor timestamp.
+ * @return An `ISimulationDriver` for the game.
+ * @author MathAid
+ */
+function buildDriver(
+  id: SimulatorId,
+  game: IGame<IFrameBuilder>,
+  fps: number,
+  fpsHistory: number,
+  startNanos: number,
+): ISimulationDriver<IGame<IFrameBuilder>> {
+  switch (id) {
+    case 'variable':
+      return new VariableTimestepDriver(game, startNanos, fpsHistory);
+    case 'event-driven':
+      return new EventDrivenDriver(game, startNanos, fpsHistory);
+    default:
+      return new FixedTimestepDriver(game, fps, startNanos, undefined, fpsHistory);
+  }
+}
+
+const settings = readSettings();
+
 const canvas = document.getElementById('game-2d') as HTMLCanvasElement;
 const context = canvas.getContext('2d');
 if (context === null) {
   throw new Error('Canvas 2D is not supported in this browser');
 }
 
-void bootstrap();
-
 const renderer = new Canvas2DRenderer(context);
-renderer.resize(WIDTH, HEIGHT);
+renderer.resize(settings.width, settings.height);
+renderer.setSprites(new SpriteRegistry());
 
-const { game, bindings } = loadGame(loaded.selectedGame);
-const keyboard = new KeyboardSource(bindings);
+const { game, bindings } = loadGame(settings.game);
+const host = buildHost(settings.host);
+const simulation = buildDriver(settings.simulator, game, settings.fps, settings.fpsHistory, host.now());
 
 /**
  * The render glue: describe the frame into a builder, then hand it to the active renderer.
+ * The game's `PresentSignal` is forwarded so the engine can throttle rendering.
  */
 const present: PresentFrame<IGame<IFrameBuilder>, IRenderer> = ({
   game: current,
@@ -132,136 +246,100 @@ const present: PresentFrame<IGame<IFrameBuilder>, IRenderer> = ({
   return signal;
 };
 
-const engine = new Engine(game, { fps: 60 }, new BrowserHostLoop(), present);
+const engine = new Engine(
+  game,
+  { fps: settings.fps, fpsHistory: settings.fpsHistory },
+  host,
+  present,
+  simulation,
+);
 engine.setRenderer(renderer);
-void engine.attachInput(keyboard, 'keyboard');
+
+const keyboard = new KeyboardSource(bindings);
+void engine.attachInput(keyboard, settings.inputName);
+
+// Live metrics HUD, driven by the engine's per-frame `metrics` event.
+const hud = document.getElementById('hud') as HTMLPreElement;
+engine.on('metrics', (m) => {
+  hud.textContent =
+    `fps      ${m.fps.toFixed(1)}\n` +
+    `alpha    ${m.alpha.toFixed(3)}\n` +
+    `dt       ${(m.dtNanos / 1e6).toFixed(2)} ms\n` +
+    `pending  ${m.pendingSteps.toFixed(3)}\n` +
+    `elapsed  ${(m.elapsedNanos / 1e9).toFixed(1)} s`;
+});
+
+// Read-only key map.
+const keymap = document.getElementById('keymap') as HTMLPreElement;
+keymap.textContent = Object.entries(bindings)
+  .map(([action, codes]) => `${action}: ${codes.join(', ')}`)
+  .join('\n');
+
 void engine.run();
 
-function bootstrap() {
-  // Setup framerate
-  getBrowserRefreshRate(200).then((rate) => {
-    const p = document.getElementById('refresh-rate') as HTMLParagraphElement;
-    p.textContent = `${rate} HZ.`;
+// The manual host has no self-driving scheduler: pump it on a timer.
+if (settings.host === 'manual') {
+  const manual = host as ManualHostLoop;
+  const frame = SecondMetric.NANOSECONDS / settings.fps;
+  window.setInterval(() => {
+    manual.clock.advance(frame);
+    manual.scheduler.tick(manual.clock.now());
+  }, Math.round(1000 / settings.fps));
+}
+
+getBrowserRefreshRate(200).then((rate) => {
+  const p = document.getElementById('refresh-rate') as HTMLParagraphElement;
+  p.textContent = `${rate} HZ.`;
+});
+
+/**
+ * @summary Build a custom-styled dropdown over the native game `<select>`.
+ * @param onSelect - Called with the chosen game id.
+ * @author MathAid
+ */
+function configureSelect(onSelect: (id: GameId) => void): void {
+  const wrapper = document.querySelector('.custom-select-wrapper') as HTMLDivElement;
+  const selectEl = wrapper.querySelector('select') as HTMLSelectElement;
+  selectEl.value = settings.game;
+
+  const selectedDiv = document.createElement('div');
+  selectedDiv.className = 'select-selected';
+  selectedDiv.innerHTML = selectEl.options[selectEl.selectedIndex].innerHTML;
+  wrapper.appendChild(selectedDiv);
+
+  const itemsDiv = document.createElement('div');
+  itemsDiv.className = 'select-items select-hide';
+
+  for (const option of Array.from(selectEl.options)) {
+    if (option.value === '') continue;
+    const item = document.createElement('div');
+    item.innerHTML = option.innerHTML;
+    item.addEventListener('click', () => {
+      selectEl.selectedIndex = option.index;
+      selectedDiv.innerHTML = option.innerHTML;
+      itemsDiv.classList.add('select-hide');
+      onSelect(option.value as GameId);
+    });
+    itemsDiv.appendChild(item);
+  }
+  wrapper.appendChild(itemsDiv);
+
+  selectedDiv.addEventListener('click', () => {
+    itemsDiv.classList.toggle('select-hide');
+    selectedDiv.classList.toggle('select-arrow-active');
   });
 
-  // const select = document.getElementById('game-select') as HTMLSelectElement;
-  // select.onchange = (e) => (GAME = select.value as GameId);
-
-  configureSelect(g => loaded.selectedGame = g);
+  document.addEventListener('click', (event) => {
+    if (!wrapper.contains(event.target as Node)) {
+      itemsDiv.classList.add('select-hide');
+      selectedDiv.classList.remove('select-arrow-active');
+    }
+  });
 }
 
-function configureSelect(onSelect: (id: GameId) => void) {
-  function constructDivOption(
-    iteration: number,
-    selectedDiv: HTMLDivElement,
-    consumeIteration: (i: number) => void,
-    optionEl: HTMLOptionElement,
-  ) {
-    function configureClick(this: HTMLDivElement) {
-      // Update original select value
-      consumeIteration(iteration);
-      selectedDiv.innerHTML = this.innerHTML;
-
-      // Highlight selected option
-      const sameAsSelected = itemsDiv.getElementsByClassName('same-as-selected');
-      for (let j = 0; j < sameAsSelected.length; j++) {
-        sameAsSelected[j].removeAttribute('class');
-      }
-      this.setAttribute('class', 'same-as-selected');
-
-      // Close dropdown
-      selectedDiv.click();
-    }
-
-    const optionDiv = document.createElement('div');
-    optionDiv.innerHTML = optionEl.innerHTML;
-
-    optionDiv.addEventListener('click', configureClick);
-
-    return optionDiv;
-  }
-
-  function populateDivOptions(selectEl: HTMLSelectElement, itemsDiv: HTMLDivElement) {
-    function consume(iteration: number) {
-      selectEl.selectedIndex = iteration;
-      onSelect(selectEl.value as GameId);
-    }
-    for (let i = 0; i < selectEl.length; i++) {
-      const option = selectEl.options[i];
-      itemsDiv.appendChild(
-        constructDivOption(
-          i,
-          selectedDiv,
-          consume,
-          option,
-        ),
-      );
-    }
-  }
-
-  function constructItemsListDiv(selectEl: HTMLSelectElement) {
-    const itemsDiv = document.createElement('div');
-    itemsDiv.setAttribute('class', 'select-items select-hide');
-
-    // Populate options from native <select>
-    populateDivOptions(selectEl, itemsDiv);
-
-    return itemsDiv;
-  }
-
-  function configureSelectDivToggle(selectedDiv: HTMLDivElement, itemsDiv: HTMLDivElement) {
-    function onDivClick(this: HTMLDivElement, e: PointerEvent) {
-      e.stopPropagation();
-      closeAllSelect(this);
-      itemsDiv.classList.toggle('select-hide');
-      this.classList.toggle('select-arrow-active');
-    }
-
-    selectedDiv.addEventListener('click', onDivClick);
-  }
-
-  function constructSelectDiv(selectEl: HTMLSelectElement) {
-    const selectedDiv = document.createElement('div');
-    selectedDiv.setAttribute('class', 'select-selected');
-    selectedDiv.innerHTML = selectEl.options[selectEl.selectedIndex].innerHTML;
-
-    return selectedDiv;
-  }
-
-  const customWrapper = document.querySelector('.custom-select-wrapper') as HTMLDivElement;
-  const selectEl = customWrapper.querySelector('select') as HTMLSelectElement;
-
-  // Create the selected display box
-  const selectedDiv = constructSelectDiv(selectEl);
-  customWrapper.appendChild(selectedDiv);
-
-  // Create options list container
-  const itemsDiv = constructItemsListDiv(selectEl);
-
-  customWrapper.appendChild(itemsDiv);
-
-  // Toggle dropdown open/close
-  configureSelectDivToggle(selectedDiv, itemsDiv);
-
-  // Close options if clicked anywhere outside
-  function closeAllSelect(element: HTMLElement | Event) {
-    const arrNo = [];
-    const items = document.getElementsByClassName('select-items');
-    const selected = document.getElementsByClassName('select-selected');
-
-    for (let i = 0; i < selected.length; i++) {
-      if (element == selected[i]) {
-        arrNo.push(i);
-      } else {
-        selected[i].classList.remove('select-arrow-active');
-      }
-    }
-    for (let i = 0; i < items.length; i++) {
-      if (arrNo.indexOf(i)) {
-        items[i].classList.add('select-hide');
-      }
-    }
-  }
-
-  document.addEventListener('click', closeAllSelect);
-}
+// Choosing a game rewrites the query string and reloads, so the whole composition is rebuilt.
+configureSelect((id) => {
+  const params = new URLSearchParams(window.location.search);
+  params.set('game', id);
+  window.location.search = params.toString();
+});

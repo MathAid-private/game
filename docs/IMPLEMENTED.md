@@ -173,3 +173,9 @@ Landed on the transient `dev` branch (see `PROPOSALS.md` for the step-by-step pl
 - **Visual sprites (§5.3)** — `ISpriteRegistry` + `SpriteRegistry` (PNG/JPEG/GIF/WebP decoding) in
   `render/sprite-registry.ts`; `Canvas2DRenderer.setSprites` resolves `{ kind: 'sprite' }` through
   the registry and `drawImage`s it (magenta placeholder when unbound/unloaded).
+- **App controls (§7)** — `apps/web/scripts/main.ts` now reads `AppSettings` from the URL query
+  string (`game`, `fps`, `fpsHistory`, `width`, `height`, `host`, `simulator`, `inputName`) and
+  composes the matching `IHostLoop` (`browser`/`node`/`manual`/`replay`) and `ISimulationDriver`
+  (`fixed`/`variable`/`event-driven`). It renders a live metrics HUD (via the `metrics` event), a
+  read-only key map, and re-`resize`s the canvas to the configured resolution; the game selector
+  rewrites the query string and reloads.

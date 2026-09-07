@@ -101,3 +101,19 @@ canvas {
   background-color: #4a4040;
   color: #e2a049; /* Gold/Amber active text */
 }
+
+/* Readout panels: live metrics HUD and the read-only key map. */
+#hud,
+#keymap {
+  color: #e6d7c3;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 8px auto;
+  padding: 10px 14px;
+  background-color: #2b2424;
+  border: 1px solid #735d4d;
+  border-radius: 8px;
+  max-width: 100%;
+  white-space: pre;
+}
