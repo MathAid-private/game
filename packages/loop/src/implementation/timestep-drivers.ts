@@ -13,7 +13,15 @@
  */
 
 import { FPS_CACHE_CAPACITY } from '../const';
-import type { Alpha, IClock, IGame, IInputState, ISimulationDriver, Timestamp } from '../types';
+import type {
+  Alpha,
+  IClock,
+  IGame,
+  IInputState,
+  ISimulationDriver,
+  StepResult,
+  Timestamp,
+} from '../types';
 import { PerformanceMetrics } from './performance';
 
 /**
@@ -92,15 +100,15 @@ export class VariableTimestepDriver<G extends IGame = IGame> implements ISimulat
    * @summary Advance the simulation by one real-time frame.
    * @param nowNanos - Current monotonic timestamp, in nanoseconds.
    * @param input - The input snapshot for this frame.
-   * @return `1` — exactly one step runs per frame.
+   * @return One step plus the step's control signal.
    * @author MathAid
    */
-  advance(nowNanos: Timestamp, input: IInputState): number {
+  advance(nowNanos: Timestamp, input: IInputState): StepResult {
     const dt = nowNanos - this.#lastNow;
     this.#lastNow = nowNanos;
-    this.#game.step({ clock: this.#timeClock, dt, metrics: this.#metrics, input });
+    const signal = this.#game.step({ clock: this.#timeClock, dt, metrics: this.#metrics, input });
     this.#metrics.record(1, nowNanos);
-    return 1;
+    return { steps: 1, signal: signal ?? 'continue' };
   }
 }
 
@@ -188,16 +196,16 @@ export class CappedVariableTimestepDriver<G extends IGame = IGame>
    * @summary Advance the simulation by one frame, with `dt` clamped to `maxDt`.
    * @param nowNanos - Current monotonic timestamp, in nanoseconds.
    * @param input - The input snapshot for this frame.
-   * @return `1` — exactly one step runs per frame.
+   * @return One step plus the step's control signal.
    * @author MathAid
    */
-  advance(nowNanos: Timestamp, input: IInputState): number {
+  advance(nowNanos: Timestamp, input: IInputState): StepResult {
     let dt = nowNanos - this.#lastNow;
     if (dt > this.#maxDt) dt = this.#maxDt;
     this.#lastNow = nowNanos;
-    this.#game.step({ clock: this.#timeClock, dt, metrics: this.#metrics, input });
+    const signal = this.#game.step({ clock: this.#timeClock, dt, metrics: this.#metrics, input });
     this.#metrics.record(1, nowNanos);
-    return 1;
+    return { steps: 1, signal: signal ?? 'continue' };
   }
 }
 
@@ -277,24 +285,24 @@ export class EventDrivenDriver<G extends IGame = IGame> implements ISimulationDr
    * @summary A time-driven no-op — re-anchors the clock and runs zero steps.
    * @param nowNanos - Current monotonic timestamp, in nanoseconds.
    * @param input - The input snapshot (unused — no step runs).
-   * @return `0` — time never advances the simulation.
+   * @return Zero steps with a `'continue'` signal — time never advances the simulation.
    * @author MathAid
    */
-  advance(nowNanos: Timestamp, _input: IInputState): number {
+  advance(nowNanos: Timestamp, _input: IInputState): StepResult {
     this.#lastNow = nowNanos;
     this.#metrics.record(0, nowNanos);
-    return 0;
+    return { steps: 0, signal: 'continue' };
   }
 
   /**
    * @summary Run exactly one simulation step on an explicit event.
    * @param input - The input snapshot for this step.
-   * @return `1`.
+   * @return One step plus the step's control signal.
    * @author MathAid
    */
-  step(input: IInputState): number {
-    this.#game.step({ clock: this.#timeClock, dt: 0, metrics: this.#metrics, input });
+  step(input: IInputState): StepResult {
+    const signal = this.#game.step({ clock: this.#timeClock, dt: 0, metrics: this.#metrics, input });
     this.#metrics.record(1, this.#lastNow);
-    return 1;
+    return { steps: 1, signal: signal ?? 'continue' };
   }
 }

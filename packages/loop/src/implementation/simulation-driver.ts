@@ -12,7 +12,16 @@
  */
 
 import { FPS_CACHE_CAPACITY, MAX_CATCHUP_STEPS, SecondMetric } from '../const';
-import type { Alpha, IClock, IGame, IInputState, ISimulationDriver, Timestamp } from '../types';
+import type {
+  Alpha,
+  IClock,
+  IGame,
+  IInputState,
+  ISimulationDriver,
+  StepResult,
+  StepSignal,
+  Timestamp,
+} from '../types';
 import { FrameClock } from './frame-clock';
 import { PerformanceMetrics } from './performance';
 
@@ -118,16 +127,17 @@ export class FixedTimestepDriver<G extends IGame = IGame> implements ISimulation
    * @summary Advance the simulation by a wall-clock sample.
    * @param nowNanos - Current monotonic timestamp, in nanoseconds.
    * @param input - The input snapshot for this frame; shared by every step run.
-   * @return The number of steps actually run (bounded by `maxSteps`).
+   * @return The steps actually run (bounded by `maxSteps`) and the aggregate control signal.
    * @author MathAid
    */
-  advance(nowNanos: Timestamp, input: IInputState): number {
+  advance(nowNanos: Timestamp, input: IInputState): StepResult {
     this.#lastNow = nowNanos;
     this.#clock.advance(nowNanos);
 
     let steps = 0;
+    let signal: StepSignal = 'continue';
     while (this.#clock.pending >= 1 && steps < this.#maxSteps) {
-      this.#game.step({
+      const stepSignal = this.#game.step({
         clock: this.#timeClock,
         dt: this.#clock.stepInterval,
         metrics: this.#metrics,
@@ -135,12 +145,18 @@ export class FixedTimestepDriver<G extends IGame = IGame> implements ISimulation
       });
       this.#clock.consume();
       steps++;
+
+      // Surface any control signal; `skip` and `pause` also stop stepping this frame.
+      if (stepSignal !== undefined && stepSignal !== 'continue') {
+        signal = stepSignal;
+        if (stepSignal === 'skip' || stepSignal === 'pause') break;
+      }
     }
 
     // Discard any debt beyond the catch-up bound so a long stall does not replay.
     if (this.#clock.pending >= 1) this.#clock.reset(nowNanos);
 
     this.#metrics.record(steps, nowNanos);
-    return steps;
+    return { steps, signal };
   }
 }

@@ -36,6 +36,60 @@ import type { IInputState } from './input.type';
 export type Alpha = number;
 
 /**
+ * @summary A control signal a game's `step` returns to direct how the engine steps next.
+ *
+ * @description
+ * `StepSignal` is the return channel by which a game influences the *loop cadence* without ever
+ * touching the scheduler. Each value is a declarative request the engine interprets:
+ *
+ * - `'continue'` — step normally (the default; also what a `void` return means).
+ * - `'pause'` — request the engine halt the loop (authority stays with the engine).
+ * - `'resume'` — request the engine resume a halted loop.
+ * - `'skip'` — stop stepping for the rest of this frame (a cut scene: no further world advance).
+ * - `'throttle'` — halve the step rate going forward (frame dropping), until `'continue'` is
+ *   returned again.
+ *
+ * Because the game only *requests* these, the engine remains the single authority over pause and
+ * cadence — see {@link ISimulationStep} and `Engine`.
+ *
+ * @author MathAid
+ */
+export type StepSignal = 'continue' | 'pause' | 'resume' | 'skip' | 'throttle';
+
+/**
+ * @summary A control signal a game's `present` returns to direct how often the engine renders.
+ *
+ * @description
+ * `PresentSignal` lets a game reduce rendering without touching the loop: a paused menu renders at
+ * a lower rate (`'reduced'`), a hidden scene renders not at all (`'none'`), and normal play renders
+ * every frame (`'full'`, the default and the meaning of a `void` return). The engine persists the
+ * last signal and applies it as a render divisor, so `'reduced'`/`'none'` hold until the game
+ * signals otherwise.
+ *
+ * @author MathAid
+ */
+export type PresentSignal = 'full' | 'reduced' | 'none';
+
+/**
+ * @summary The result of one `advance` call: the step count and the control signal to apply next.
+ *
+ * @description
+ * `StepResult` pairs how many simulation steps actually ran with the `StepSignal` the engine
+ * should act on. The `signal` is the *aggregate* of the steps run this frame — the last
+ * non-`'continue'` signal, or `'continue'` when every step returned `'continue'`/`void`. `'skip'`
+ * and `'pause'` stop the stepping loop early and are surfaced here so the engine can react.
+ *
+ * @see {@link ISimulationDriver}
+ * @author MathAid
+ */
+export interface StepResult {
+  /** Simulation steps actually run this frame. */
+  readonly steps: number;
+  /** The control signal to apply (the last non-continue signal, else `'continue'`). */
+  readonly signal: StepSignal;
+}
+
+/**
  * @summary Accumulates wall time into whole, fixed-size simulation steps.
  *
  * @description
@@ -149,14 +203,19 @@ export interface ISimulationContext {
  * APIs, or touch rendering — it only transforms state given its context, which is what makes the
  * simulation reproducible and testable.
  *
+ * `step` may return a {@link StepSignal} to steer the loop cadence (pause, skip, throttle); a
+ * `void` return is treated as `'continue'`.
+ *
  * @example
  * class Physics implements ISimulationStep {
- *   step({ clock, input }: ISimulationContext): void {
+ *   step({ clock, input }: ISimulationContext): StepSignal | void {
  *     if (input.isDown('move-right')) this.x += 1;
+ *     return this.x > WIN ? 'pause' : 'continue';
  *   }
  * }
  *
  * @see {@link ISimulationContext}
+ * @see {@link StepSignal}
  * @see {@link IPresentable}
  * @author MathAid
  */
@@ -164,9 +223,10 @@ export interface ISimulationStep {
   /**
    * @summary Advance the game state by one fixed step.
    * @param context - Timing, metrics, and input for this step.
+   * @return An optional control signal directing the next step(s); `void` means `'continue'`.
    * @author MathAid
    */
-  step(context: ISimulationContext): void;
+  step(context: ISimulationContext): StepSignal | void;
 }
 
 /**
@@ -201,24 +261,30 @@ export interface IPresentationContext<F = unknown> {
  *
  * @template F - The presentation output type. Defaults to `unknown` for headless use.
  *
+ * `present` may return a {@link PresentSignal} to request a lower render rate (`'reduced'`) or no
+ * rendering (`'none'`); a `void` return is treated as `'full'`.
+ *
  * @example
  * class View implements IPresentable<IFrameBuilder> {
- *   present({ frame, alpha }: IPresentationContext<IFrameBuilder>): void {
+ *   present({ frame, alpha }: IPresentationContext<IFrameBuilder>): PresentSignal {
  *     frame.clear();
  *     frame.rect(this.bounds, this.colour);
+ *     return this.visible ? 'full' : 'none';
  *   }
  * }
  *
  * @see {@link IPresentationContext}
+ * @see {@link PresentSignal}
  * @author MathAid
  */
 export interface IPresentable<F = unknown> {
   /**
    * @summary Describe the current frame.
    * @param context - The interpolation factor and the frame output to describe.
+   * @return An optional control signal directing rendering frequency; `void` means `'full'`.
    * @author MathAid
    */
-  present(context: IPresentationContext<F>): void;
+  present(context: IPresentationContext<F>): PresentSignal | void;
 }
 
 /**
@@ -234,8 +300,8 @@ export interface IPresentable<F = unknown> {
  *
  * @example
  * class Tetris implements IGame<IFrameBuilder> {
- *   step(ctx: ISimulationContext): void { /* advance logic *\/ }
- *   present({ frame }: IPresentationContext<IFrameBuilder>): void { /* describe board *\/ }
+ *   step(ctx: ISimulationContext): StepSignal | void { /* advance logic *\/ }
+ *   present({ frame }: IPresentationContext<IFrameBuilder>): PresentSignal | void { /* describe board *\/ }
  * }
  *
  * @see {@link ISimulationStep}
@@ -273,10 +339,10 @@ export interface ISimulationDriver<G extends IGame = IGame> {
    * @summary Advance the simulation by a wall-clock sample.
    * @param now - Current monotonic timestamp, in nanoseconds.
    * @param input - The input snapshot for this frame; shared by every step run.
-   * @return The number of steps run.
+   * @return The steps run plus the aggregate {@link StepSignal} for the caller to apply.
    * @author MathAid
    */
-  advance(now: number, input: IInputState): number;
+  advance(now: number, input: IInputState): StepResult;
   /**
    * @summary The sub-frame interpolation factor in `[0, 1)` for presentation.
    * @author MathAid

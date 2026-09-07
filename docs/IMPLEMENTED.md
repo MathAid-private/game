@@ -129,3 +129,23 @@ rendering only via `present` commands.
   Snake (wall-wrap/turn), Space Invaders (shooting/movement), and every PRNG (determinism + range).
 - **Vitest suite:** `vitest.config.ts` + 9 test files across `loop`/`math`/`render`/`games`
   (written; run locally with `pnpm install && pnpm test`).
+
+---
+
+## 10. Engine evolution (`dev` branch)
+
+Landed on the transient `dev` branch (see `PROPOSALS.md` for the step-by-step plans):
+
+- **Generic schedule handle** (§6.2) — `IScheduleHandle<T>`, `IScheduler<T>`, `IHostLoop<T>` are now
+  generic over the token type; `rAFScheduler` is `IScheduler<number>`, `ManualScheduler` is
+  `IScheduler<null>`.
+- **Driver-agnostic simulation** (§1) — `ISimulationContext.clock` widened to `IClock` and `dt`
+  added; `ISimulationDriver` gained `interpolation()`/`reset()` and dropped `clock`/`canStep`;
+  `FixedTimestepDriver` re-anchored internally. New `timestep-drivers.ts`:
+  `VariableTimestepDriver`, `CappedVariableTimestepDriver`, `EventDrivenDriver`.
+- **Control signals** (§4) — `StepSignal` (`'continue' | 'pause' | 'resume' | 'skip' | 'throttle'`)
+  and `PresentSignal` (`'full' | 'reduced' | 'none'`) in `simulation.type.ts`; `step`/`present` may
+  return them (a `void` return means `'continue'`/`'full'`). `ISimulationDriver.advance` now returns
+  `StepResult { steps, signal }`; `FixedTimestepDriver` stops stepping on `'skip'`/`'pause'`.
+  `Engine` interprets signals via `#stepScale`/`#renderScale` (throttle halves the step/render rate,
+  `'none'` stops rendering) while remaining the single authority over pause.

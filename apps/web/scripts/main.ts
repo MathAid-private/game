@@ -127,8 +127,9 @@ const present: PresentFrame<IGame<IFrameBuilder>, IRenderer> = ({
   renderer: active,
 }) => {
   const frame = new FrameBuilder();
-  current.present({ alpha, frame });
+  const signal = current.present({ alpha, frame });
   active?.render(frame);
+  return signal;
 };
 
 const engine = new Engine(game, { fps: 60 }, new BrowserHostLoop(), present);

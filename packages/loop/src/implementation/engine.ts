@@ -28,6 +28,8 @@ import type {
   IInputState,
   IScheduleHandle,
   ISimulationDriver,
+  PresentSignal,
+  StepSignal,
   Timestamp,
 } from '../types';
 import { EventEmitter } from './event-emitter';
@@ -49,8 +51,9 @@ import { FixedTimestepDriver } from './simulation-driver';
  * @example
  * const present: PresentFrame<MyGame, IRenderer> = ({ game, alpha, renderer }) => {
  *   const builder = new FrameBuilder();
- *   game.present({ alpha, frame: builder });
+ *   const signal = game.present({ alpha, frame: builder });
  *   renderer?.render(builder.build());
+ *   return signal;
  * };
  *
  * @see {@link Engine}
@@ -60,7 +63,7 @@ export type PresentFrame<G extends IGame = IGame, R = unknown> = (context: {
   readonly game: G;
   readonly alpha: Alpha;
   readonly renderer: R | null;
-}) => void;
+}) => PresentSignal | void;
 
 /**
  * @summary The engine composition root.
@@ -99,6 +102,9 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
   readonly #inputs = new Map<string, IInputSource>();
   #renderer: R | null = null;
   #paused = false;
+  #stepScale = 1;
+  #renderScale = 1;
+  #frameIndex = 0;
   #handle: IScheduleHandle | null = null;
 
   on = this.#emitter.on.bind(this.#emitter) as IEngine<G, R>['on'];
@@ -238,18 +244,71 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
     const loop = (nowNanos: Timestamp) => {
       if (!this.#paused) {
         const input = this.#sampleInput();
-        this.#simulation.advance(nowNanos, input);
-        this.#present?.({
-          game: this.#game,
-          alpha: this.#simulation.interpolation(),
-          renderer: this.#renderer,
-        });
+
+        // Step at a throttled rate: `#stepScale` drops whole frames of simulation.
+        if (this.#frameIndex % this.#stepScale === 0) {
+          this.#applyStepSignal(this.#simulation.advance(nowNanos, input).signal);
+        }
+
+        // Present at a throttled rate: `#renderScale` drops whole frames of rendering.
+        if (Number.isFinite(this.#renderScale) && this.#frameIndex % this.#renderScale === 0) {
+          const signal = this.#present?.({
+            game: this.#game,
+            alpha: this.#simulation.interpolation(),
+            renderer: this.#renderer,
+          });
+          this.#applyPresentSignal(signal ?? 'full');
+        }
       }
+      this.#frameIndex++;
       this.#handle = this.#host.schedule(loop);
     };
 
     this.#handle = this.#host.schedule(loop);
     this.#emitter.emit('started');
+  }
+
+  /**
+   * @summary Apply a `StepSignal`, updating pause and the step scale.
+   * @param signal - The aggregate control signal from the last `advance`.
+   * @author MathAid
+   */
+  #applyStepSignal(signal: StepSignal): void {
+    switch (signal) {
+      case 'pause':
+        this.paused = true;
+        break;
+      case 'resume':
+        this.paused = false;
+        break;
+      case 'throttle':
+        this.#stepScale = 2;
+        break;
+      case 'continue':
+        this.#stepScale = 1;
+        break;
+      case 'skip':
+        break; // handled by the driver: it already stopped stepping this frame.
+    }
+  }
+
+  /**
+   * @summary Apply a `PresentSignal`, updating the render scale.
+   * @param signal - The signal returned by the last present pass.
+   * @author MathAid
+   */
+  #applyPresentSignal(signal: PresentSignal): void {
+    switch (signal) {
+      case 'full':
+        this.#renderScale = 1;
+        break;
+      case 'reduced':
+        this.#renderScale = 2;
+        break;
+      case 'none':
+        this.#renderScale = Number.POSITIVE_INFINITY;
+        break;
+    }
   }
 
   /**
