@@ -29,7 +29,7 @@ import type { IScheduleHandle, IScheduler, Timestamp } from '../types';
  * @see {@link IScheduler}
  * @author MathAid
  */
-export class ManualScheduler implements IScheduler {
+export class ManualScheduler implements IScheduler<null> {
   #step: ((now: Timestamp) => void) | null = null;
 
   /**
@@ -38,7 +38,7 @@ export class ManualScheduler implements IScheduler {
    * @return A handle identifying this registration.
    * @author MathAid
    */
-  schedule(step: (now: Timestamp) => void): IScheduleHandle {
+  schedule(step: (now: Timestamp) => void): IScheduleHandle<null> {
     this.#step = step;
     return { token: null };
   }
@@ -48,7 +48,7 @@ export class ManualScheduler implements IScheduler {
    * @param _handle - The value returned by `schedule`. A no-op if none is registered.
    * @author MathAid
    */
-  cancel(_handle: IScheduleHandle): void {
+  cancel(_handle: IScheduleHandle<null>): void {
     this.#step = null;
   }
 
