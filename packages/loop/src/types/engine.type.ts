@@ -15,9 +15,9 @@
  * @author MathAid
  */
 
+import type { IAudioSink } from './audio.type';
 import type { IClock } from './clock.type';
 import type { IEventEmitter } from './event.type';
-import type { IAudioSink } from './audio.type';
 import type { IInputSource } from './input.type';
 import type { IGame, IPerformanceMetrics, LiveMetrics } from './simulation.type';
 
@@ -42,6 +42,8 @@ export interface IEngineConfig {
   readonly fpsHistory?: number;
   /** Upper bound on simulation catch-up steps run in a single host frame. */
   readonly maxSteps?: number;
+  /** The minimum wall-time between paused-loop GUI ticks, in nanoseconds. */
+  readonly guiInterval?: number;
   /** Request browser fullscreen when the engine runs. */
   readonly fullscreen?: boolean;
   /** Fixed logical resolution in device-independent pixels. */

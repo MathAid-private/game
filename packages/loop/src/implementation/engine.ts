@@ -15,6 +15,7 @@
  * @author MathAid
  */
 
+import { NoopAudioSink } from '../audio/noop-audio-sink';
 import { FPS_CACHE_CAPACITY, GUI_INTERVAL_NS, MAX_CATCHUP_STEPS } from '../const';
 import type {
   Alpha,
@@ -35,7 +36,6 @@ import type {
   StepSignal,
   Timestamp,
 } from '../types';
-import { NoopAudioSink } from '../audio/noop-audio-sink';
 import { EventEmitter } from './event-emitter';
 import { CompositeInputState, NullInputState } from './input';
 import { FixedTimestepDriver } from './simulation-driver';
@@ -281,7 +281,7 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
         // Throttled GUI loop: while paused, still navigate + draw the pause menu at a reduced
         // cadence. The game's `step` routes input to the menu (never the world); its signal can
         // request `'resume'`, which returns authority to the engine via `#applyStepSignal`.
-        if (nowNanos - this.#lastGuiNanos >= GUI_INTERVAL_NS) {
+        if (nowNanos - this.#lastGuiNanos >= (this.#config.guiInterval ?? GUI_INTERVAL_NS)) {
           this.#lastGuiNanos = nowNanos;
           const signal = this.#game.step({
             clock: this.#host,
