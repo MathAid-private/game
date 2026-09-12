@@ -10,7 +10,7 @@
  * @author MathAid
  */
 
-import type { IAudioSink } from '../types';
+import type { IAudioPlayOptions, IAudioSink } from '../types';
 
 /**
  * @summary An `IAudioSink` that discards all requests.
@@ -36,7 +36,7 @@ export class NoopAudioSink implements IAudioSink {
    * @param _opts - Ignored.
    * @author MathAid
    */
-  play(_name: string, _opts?: { readonly volume?: number; readonly loop?: boolean }): void {}
+  play(_name: string, _opts?: IAudioPlayOptions): void {}
 
   /**
    * @summary Discard a stop request.

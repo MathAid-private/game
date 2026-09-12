@@ -10,7 +10,7 @@
  * @author MathAid
  */
 
-import type { IAudioSink } from '../types';
+import type { IAudioPlayOptions, IAudioSink } from '../types';
 
 /**
  * @summary A logged audio request.
@@ -19,7 +19,7 @@ import type { IAudioSink } from '../types';
 export interface AudioCall {
   readonly kind: 'play' | 'stop' | 'setVolume';
   readonly name?: string;
-  readonly opts?: { readonly volume?: number; readonly loop?: boolean };
+  readonly opts?: IAudioPlayOptions;
   readonly volume?: number;
 }
 
@@ -56,7 +56,7 @@ export class RecordingAudioSink implements IAudioSink {
    * @param opts - Optional volume/loop.
    * @author MathAid
    */
-  play(name: string, opts?: { readonly volume?: number; readonly loop?: boolean }): void {
+  play(name: string, opts?: IAudioPlayOptions): void {
     this.#calls.push({ kind: 'play', name, opts });
   }
 

@@ -13,6 +13,23 @@
  */
 
 /**
+ * Optiona used at {@linkcode IAudioSink.play}
+ */
+export interface IAudioPlayOptions extends Readonly<Pick<
+  AudioBufferSourceNode,
+  | 'loop'
+  | 'loopStart'
+  | 'loopEnd'
+  | 'playbackRate'
+  | 'detune'
+  | 'numberOfInputs'
+  | 'numberOfOutputs'
+>> {
+  /** Audio volume */
+  readonly volume?: number;
+}
+
+/**
  * @summary A swappable audio backend: plays named sounds on request.
  *
  * @description
@@ -35,10 +52,10 @@ export interface IAudioSink {
   /**
    * @summary Start playing a named sound.
    * @param name - The game-defined sound id.
-   * @param opts - Optional volume (`0..1`) and loop flag.
+   * @param opts - Optional volume (`0..1`), loop flag...
    * @author MathAid
    */
-  play(name: string, opts?: { readonly volume?: number; readonly loop?: boolean }): void;
+  play(name: string, opts?: IAudioPlayOptions): void;
   /**
    * @summary Stop a named sound.
    * @param name - The game-defined sound id to halt.

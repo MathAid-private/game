@@ -11,7 +11,7 @@
  * @author MathAid
  */
 
-import type { IAudioSink } from '../types';
+import type { IAudioPlayOptions, IAudioSink } from '../types';
 
 /**
  * @summary An `IAudioSink` over the Web Audio API.
@@ -69,7 +69,7 @@ export class WebAudioSink implements IAudioSink {
    * @param opts - Optional volume (`0..1`) and loop flag.
    * @author MathAid
    */
-  play(name: string, opts?: { readonly volume?: number; readonly loop?: boolean }): void {
+  play(name: string, opts?: IAudioPlayOptions): void {
     const buffer = this.#buffers.get(name);
     if (buffer === undefined) return;
 
