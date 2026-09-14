@@ -12,6 +12,7 @@
  * @author MathAid
  */
 
+import { NoopAudioSink } from '../audio/noop-audio-sink';
 import { FPS_CACHE_CAPACITY, MAX_CATCHUP_STEPS, SecondMetric } from '../const';
 import type {
   Alpha,
@@ -25,7 +26,6 @@ import type {
   StepSignal,
   Timestamp,
 } from '../types';
-import { NoopAudioSink } from '../audio/noop-audio-sink';
 import { PerformanceMetrics } from './performance';
 
 /**
@@ -161,7 +161,11 @@ export class VariableTimestepDriver<G extends IGame = IGame> implements ISimulat
  * @template G - The concrete game type; defaults to `IGame`.
  *
  * @example
- * const driver = new CappedVariableTimestepDriver(game, host.now(), /* maxDtNanos *\/ 33_333_333);
+ * const driver = new CappedVariableTimestepDriver(
+ *   game,
+ *   host.now(), // maxDtNanos
+ *   33_333_333
+ * );
  *
  * @see {@link VariableTimestepDriver}
  * @author MathAid
