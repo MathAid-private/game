@@ -4,5 +4,6 @@ export * from './scheduler';
 export * from './frame-clock';
 export * from './performance';
 export * from './simulation-driver';
+export * from './timestep-drivers';
 export * from './input';
 export * from './engine';

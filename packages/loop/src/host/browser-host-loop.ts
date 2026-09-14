@@ -32,7 +32,7 @@ import { RAFScheduler } from './raf-scheduler';
  * @see {@link RAFScheduler}
  * @author MathAid
  */
-export class BrowserHostLoop implements IHostLoop {
+export class BrowserHostLoop implements IHostLoop<number> {
   readonly #clock = new NanoClock();
   readonly #scheduler = new RAFScheduler();
 
@@ -51,7 +51,7 @@ export class BrowserHostLoop implements IHostLoop {
    * @return A handle used to cancel this schedule.
    * @author MathAid
    */
-  schedule(step: (now: Timestamp) => void): IScheduleHandle {
+  schedule(step: (now: Timestamp) => void): IScheduleHandle<number> {
     return this.#scheduler.schedule(step);
   }
 
@@ -60,7 +60,7 @@ export class BrowserHostLoop implements IHostLoop {
    * @param handle - The value returned by `schedule`.
    * @author MathAid
    */
-  cancel(handle: IScheduleHandle): void {
+  cancel(handle: IScheduleHandle<number>): void {
     this.#scheduler.cancel(handle);
   }
 }

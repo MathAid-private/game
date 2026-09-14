@@ -92,9 +92,9 @@ export interface IClock {
  * @see {@link IScheduler}
  * @author MathAid
  */
-export interface IScheduleHandle {
+export interface IScheduleHandle<T = unknown> {
   /** Opaque cancellation token, interpreted only by the scheduler that created it. */
-  readonly token: unknown;
+  readonly token: T;
 }
 
 /**
@@ -119,20 +119,20 @@ export interface IScheduleHandle {
  * @see {@link IHostLoop}
  * @author MathAid
  */
-export interface IScheduler {
+export interface IScheduler<T = unknown> {
   /**
    * @summary Register a step callback to run on each frame.
    * @param step - Called once per frame with the current timestamp, in nanoseconds.
    * @return An opaque handle used to cancel this schedule.
    * @author MathAid
    */
-  schedule(step: (now: Timestamp) => void): IScheduleHandle;
+  schedule(step: (now: Timestamp) => void): IScheduleHandle<T>;
   /**
    * @summary Stop a previously scheduled step.
    * @param handle - The value returned by `schedule`. A no-op if already cancelled or unknown.
    * @author MathAid
    */
-  cancel(handle: IScheduleHandle): void;
+  cancel(handle: IScheduleHandle<T>): void;
 }
 
 /**
@@ -151,4 +151,4 @@ export interface IScheduler {
  * @see {@link IScheduler}
  * @author MathAid
  */
-export interface IHostLoop extends IClock, IScheduler {}
+export interface IHostLoop<T = unknown> extends IClock, IScheduler<T> {}

@@ -30,14 +30,14 @@ import type { IScheduleHandle, IScheduler, Timestamp } from '../types';
  * @see {@link IScheduler}
  * @author MathAid
  */
-export class RAFScheduler implements IScheduler {
+export class RAFScheduler implements IScheduler<number> {
   /**
    * @summary Register a step to run on the next display frame.
    * @param step - Called once with the frame timestamp, in nanoseconds.
    * @return A handle whose token is the rAF id.
    * @author MathAid
    */
-  schedule(step: (now: Timestamp) => void): IScheduleHandle {
+  schedule(step: (now: Timestamp) => void): IScheduleHandle<number> {
     const id = requestAnimationFrame((timeMs: number) => step(timeMs * 1e6));
     return { token: id };
   }
@@ -47,7 +47,7 @@ export class RAFScheduler implements IScheduler {
    * @param handle - The value returned by `schedule`.
    * @author MathAid
    */
-  cancel(handle: IScheduleHandle): void {
-    if (typeof handle.token === 'number') cancelAnimationFrame(handle.token);
+  cancel(handle: IScheduleHandle<number>): void {
+    cancelAnimationFrame(handle.token);
   }
 }

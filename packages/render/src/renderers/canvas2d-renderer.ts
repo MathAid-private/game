@@ -11,10 +11,11 @@
  * @author MathAid
  */
 
-import type { Color, Rect } from '@games/math';
-import type { RenderCommand, StrokeStyle, TextStyle } from '../command';
+import type { Color, Rect, Transform2D } from '@games/math';
+import type { RenderCommand, SpriteRef, StrokeStyle, TextStyle } from '../command';
 import type { IFrame } from '../frame';
 import type { IRenderer, IRendererCapabilities } from '../renderer';
+import type { ISpriteRegistry } from '../sprite-registry';
 
 /**
  * @summary Capabilities of a Canvas 2D surface.
@@ -61,6 +62,7 @@ function toCssColor(color: Color): string {
  */
 export class Canvas2DRenderer implements IRenderer {
   readonly #ctx: CanvasRenderingContext2D;
+  #sprites: ISpriteRegistry | null = null;
 
   /**
    * @summary Construct a renderer over an existing 2D context.
@@ -69,6 +71,15 @@ export class Canvas2DRenderer implements IRenderer {
    */
   constructor(ctx: CanvasRenderingContext2D) {
     this.#ctx = ctx;
+  }
+
+  /**
+   * @summary Bind (or unbind) the sprite registry used to resolve sprite ids.
+   * @param registry - The registry to draw sprites from, or `null` to draw placeholders.
+   * @author MathAid
+   */
+  setSprites(registry: ISpriteRegistry | null): void {
+    this.#sprites = registry;
   }
 
   /**
@@ -124,12 +135,7 @@ export class Canvas2DRenderer implements IRenderer {
         this.#text(command.text, command.position.x, command.position.y, command.style);
         break;
       case 'sprite':
-        this.#sprite(
-          command.transform.x,
-          command.transform.y,
-          command.transform.scaleX ?? 1,
-          command.transform.scaleY ?? 1,
-        );
+        this.#sprite(command.sprite, command.transform);
         break;
       case 'push':
         this.#ctx.save();
@@ -191,25 +197,29 @@ export class Canvas2DRenderer implements IRenderer {
   }
 
   /**
-   * @summary Draw a sprite placeholder at a transform.
+   * @summary Draw a sprite (or a placeholder) at a transform.
    *
    * @description
-   * Sprite assets require a registry mapping `SpriteRef.id` to an image or shape, which is a
-   * later refinement. Until then this renders a unit placeholder at the transform so sprite
-   * commands are visible and layout is verifiable.
+   * Resolves `sprite.id` through the bound sprite registry and draws the image at the transform.
+   * When no registry is bound, or the id is not (yet) loaded, it falls back to a magenta unit
+   * placeholder so sprite layout remains visible without an asset.
    *
-   * @param x - Horizontal translation.
-   * @param y - Vertical translation.
-   * @param scaleX - Horizontal scale.
-   * @param scaleY - Vertical scale.
+   * @param sprite - The sprite reference to resolve.
+   * @param transform - Placement, scale, and rotation.
    * @author MathAid
    */
-  #sprite(x: number, y: number, scaleX: number, scaleY: number): void {
+  #sprite(sprite: SpriteRef, transform: Transform2D): void {
+    const image = this.#sprites?.get(sprite.id);
     this.#ctx.save();
-    this.#ctx.translate(x, y);
-    this.#ctx.scale(scaleX, scaleY);
-    this.#ctx.fillStyle = 'magenta';
-    this.#ctx.fillRect(0, 0, 1, 1);
+    this.#ctx.translate(transform.x, transform.y);
+    if (transform.rotation !== undefined) this.#ctx.rotate(transform.rotation);
+    this.#ctx.scale(transform.scaleX ?? 1, transform.scaleY ?? 1);
+    if (image !== undefined) {
+      this.#ctx.drawImage(image, 0, 0);
+    } else {
+      this.#ctx.fillStyle = 'magenta';
+      this.#ctx.fillRect(0, 0, 1, 1);
+    }
     this.#ctx.restore();
   }
 }

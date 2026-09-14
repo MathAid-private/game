@@ -15,10 +15,13 @@
  * @author MathAid
  */
 
-import { FPS_CACHE_CAPACITY, MAX_CATCHUP_STEPS } from '../const';
+import { NoopAudioSink } from '../audio/noop-audio-sink';
+import { FPS_CACHE_CAPACITY, GUI_INTERVAL_NS, MAX_CATCHUP_STEPS } from '../const';
 import type {
   Alpha,
   EngineEvents,
+  IAudioSink,
+  IClock,
   IEngine,
   IEngineConfig,
   IGame,
@@ -26,6 +29,11 @@ import type {
   IInputSource,
   IInputState,
   IScheduleHandle,
+  ISimulationDriver,
+  LiveMetrics,
+  Nanoseconds,
+  PresentSignal,
+  StepSignal,
   Timestamp,
 } from '../types';
 import { EventEmitter } from './event-emitter';
@@ -47,8 +55,9 @@ import { FixedTimestepDriver } from './simulation-driver';
  * @example
  * const present: PresentFrame<MyGame, IRenderer> = ({ game, alpha, renderer }) => {
  *   const builder = new FrameBuilder();
- *   game.present({ alpha, frame: builder });
+ *   const signal = game.present({ alpha, frame: builder });
  *   renderer?.render(builder.build());
+ *   return signal;
  * };
  *
  * @see {@link Engine}
@@ -58,7 +67,7 @@ export type PresentFrame<G extends IGame = IGame, R = unknown> = (context: {
   readonly game: G;
   readonly alpha: Alpha;
   readonly renderer: R | null;
-}) => void;
+}) => PresentSignal | void;
 
 /**
  * @summary The engine composition root.
@@ -92,11 +101,18 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
   readonly #config: IEngineConfig;
   readonly #game: G;
   readonly #host: IHostLoop;
-  readonly #simulation: FixedTimestepDriver<G>;
+  readonly #simulation: ISimulationDriver<G>;
   readonly #present: PresentFrame<G, R> | null;
   readonly #inputs = new Map<string, IInputSource>();
   #renderer: R | null = null;
+  #audio: IAudioSink = NoopAudioSink.INSTANCE;
   #paused = false;
+  #running = false;
+  #stepScale = 1;
+  #renderScale = 1;
+  #frameIndex = 0;
+  #lastGuiNanos = Number.NEGATIVE_INFINITY;
+  #startNanos = 0;
   #handle: IScheduleHandle | null = null;
 
   on = this.#emitter.on.bind(this.#emitter) as IEngine<G, R>['on'];
@@ -104,25 +120,36 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
   emit = this.#emitter.emit.bind(this.#emitter) as IEngine<G, R>['emit'];
 
   /**
-   * @summary Construct an engine over a game, configuration, and host loop.
+   * @summary Construct an engine over a game, configuration, host loop, and simulation driver.
    * @param game - The game to drive.
    * @param config - Static engine configuration.
    * @param host - The clock + scheduler the loop runs on.
    * @param present - Optional render glue called once per frame; omit for headless use.
+   * @param simulation - Optional simulation driver. Defaults to a `FixedTimestepDriver` at
+   *   `config.fps`.
    * @author MathAid
    */
-  constructor(game: G, config: IEngineConfig, host: IHostLoop, present?: PresentFrame<G, R>) {
+  constructor(
+    game: G,
+    config: IEngineConfig,
+    host: IHostLoop,
+    present?: PresentFrame<G, R>,
+    simulation?: ISimulationDriver<G>,
+  ) {
     this.#game = game;
     this.#config = config;
     this.#host = host;
     this.#present = present ?? null;
-    this.#simulation = new FixedTimestepDriver(
-      game,
-      config.fps,
-      host.now(),
-      config.maxSteps ?? MAX_CATCHUP_STEPS,
-      config.fpsHistory ?? FPS_CACHE_CAPACITY,
-    );
+    this.#startNanos = host.now();
+    this.#simulation =
+      simulation ??
+      new FixedTimestepDriver(
+        game,
+        config.fps,
+        host.now(),
+        config.maxSteps ?? MAX_CATCHUP_STEPS,
+        config.fpsHistory ?? FPS_CACHE_CAPACITY,
+      );
   }
 
   /**
@@ -142,11 +169,11 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
   }
 
   /**
-   * @summary Read-only timing view (pending steps, step interval).
+   * @summary The time source (monotonic `now()`).
    * @author MathAid
    */
-  get clock() {
-    return this.#simulation.clock;
+  get clock(): IClock {
+    return this.#host;
   }
 
   /**
@@ -155,6 +182,19 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
    */
   get metrics() {
     return this.#simulation.metrics;
+  }
+
+  /**
+   * @summary A per-frame snapshot of live metrics (FPS/alpha/dt/elapsed).
+   *
+   * @description
+   * Computed on demand from the simulation driver and the host clock. Prefer subscribing to the
+   * `metrics` event for a zero-polling HUD; this getter is for one-off reads.
+   *
+   * @author MathAid
+   */
+  get live(): LiveMetrics {
+    return this.#liveAt(this.#host.now());
   }
 
   /**
@@ -174,9 +214,10 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
     if (value === this.#paused) return;
     if (value) {
       this.#paused = true;
+      this.#lastGuiNanos = Number.NEGATIVE_INFINITY; // show the pause menu immediately
       this.#emitter.emit('paused');
     } else {
-      this.#simulation.clock.reset(this.#host.now());
+      this.#simulation.reset(this.#host.now());
       this.#paused = false;
       this.#emitter.emit('resumed');
     }
@@ -218,26 +259,116 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
   }
 
   /**
+   * @summary Set the active audio sink.
+   * @param sink - The sink game sound requests are forwarded to.
+   * @author MathAid
+   */
+  setAudio(sink: IAudioSink): void {
+    this.#audio = sink;
+    this.#simulation.setAudio(sink);
+    this.#emitter.emit('audioChanged', { sink });
+  }
+
+  /**
    * @summary Start the loop.
    * @return Resolves once the first frame is scheduled (not when the engine stops).
    * @author MathAid
    */
   async run(): Promise<void> {
     const loop = (nowNanos: Timestamp) => {
-      if (!this.#paused) {
-        const input = this.#sampleInput();
-        this.#simulation.advance(nowNanos, input);
-        this.#present?.({
-          game: this.#game,
-          alpha: this.#simulation.clock.pending,
-          renderer: this.#renderer,
-        });
+      const input = this.#sampleInput();
+      if (this.#paused) {
+        // Throttled GUI loop: while paused, still navigate + draw the pause menu at a reduced
+        // cadence. The game's `step` routes input to the menu (never the world); its signal can
+        // request `'resume'`, which returns authority to the engine via `#applyStepSignal`.
+        if (nowNanos - this.#lastGuiNanos >= (this.#config.guiInterval ?? GUI_INTERVAL_NS)) {
+          this.#lastGuiNanos = nowNanos;
+          const signal = this.#game.step({
+            clock: this.#host,
+            dt: 0,
+            metrics: this.#simulation.metrics,
+            input,
+            audio: this.#audio,
+          });
+          this.#applyStepSignal(signal ?? 'continue');
+          const presentSignal = this.#present?.({
+            game: this.#game,
+            alpha: 0,
+            renderer: this.#renderer,
+          });
+          this.#applyPresentSignal(presentSignal ?? 'full');
+        }
+      } else {
+        // Step at a throttled rate: `#stepScale` drops whole frames of simulation.
+        if (this.#frameIndex % this.#stepScale === 0) {
+          this.#applyStepSignal(this.#simulation.advance(nowNanos, input).signal);
+        }
+
+        // Present at a throttled rate: `#renderScale` drops whole frames of rendering.
+        if (Number.isFinite(this.#renderScale) && this.#frameIndex % this.#renderScale === 0) {
+          const signal = this.#present?.({
+            game: this.#game,
+            alpha: this.#simulation.interpolation(),
+            renderer: this.#renderer,
+          });
+          this.#applyPresentSignal(signal ?? 'full');
+        }
       }
-      this.#handle = this.#host.schedule(loop);
+      this.#emitter.emit('metrics', this.#liveAt(nowNanos));
+      this.#frameIndex++;
+      // Guard against an in-flight delivery firing after `stop()`: only reschedule while running.
+      if (this.#running) {
+        this.#handle = this.#host.schedule(loop);
+      }
     };
 
+    this.#running = true;
+    this.#startNanos = this.#host.now();
     this.#handle = this.#host.schedule(loop);
     this.#emitter.emit('started');
+  }
+
+  /**
+   * @summary Apply a `StepSignal`, updating pause and the step scale.
+   * @param signal - The aggregate control signal from the last `advance`.
+   * @author MathAid
+   */
+  #applyStepSignal(signal: StepSignal): void {
+    switch (signal) {
+      case 'pause':
+        this.paused = true;
+        break;
+      case 'resume':
+        this.paused = false;
+        break;
+      case 'throttle':
+        this.#stepScale = 2;
+        break;
+      case 'continue':
+        this.#stepScale = 1;
+        break;
+      case 'skip':
+        break; // handled by the driver: it already stopped stepping this frame.
+    }
+  }
+
+  /**
+   * @summary Apply a `PresentSignal`, updating the render scale.
+   * @param signal - The signal returned by the last present pass.
+   * @author MathAid
+   */
+  #applyPresentSignal(signal: PresentSignal): void {
+    switch (signal) {
+      case 'full':
+        this.#renderScale = 1;
+        break;
+      case 'reduced':
+        this.#renderScale = 2;
+        break;
+      case 'none':
+        this.#renderScale = Number.POSITIVE_INFINITY;
+        break;
+    }
   }
 
   /**
@@ -246,6 +377,7 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
    * @author MathAid
    */
   async stop(): Promise<void> {
+    this.#running = false;
     if (this.#handle === null) return;
     this.#host.cancel(this.#handle);
     this.#handle = null;
@@ -262,5 +394,21 @@ export class Engine<G extends IGame = IGame, R = unknown> implements IEngine<G, 
     if (this.#inputs.size === 0) return NullInputState.INSTANCE;
     const states = Array.from(this.#inputs.values(), (source) => source.sample());
     return states.length === 1 ? states[0] : new CompositeInputState(states);
+  }
+
+  /**
+   * @summary Build a `LiveMetrics` snapshot for a given timestamp.
+   * @param nowNanos - The frame timestamp, in nanoseconds.
+   * @return The snapshot (FPS from the last closed second, alpha, dt, pending, elapsed).
+   * @author MathAid
+   */
+  #liveAt(nowNanos: Nanoseconds): LiveMetrics {
+    return {
+      fps: this.#simulation.metrics.frameHistory.at(-1)?.steps ?? 0,
+      alpha: this.#simulation.interpolation(),
+      dtNanos: this.#simulation.lastDt,
+      pendingSteps: this.#simulation.pendingSteps,
+      elapsedNanos: nowNanos - this.#startNanos,
+    };
   }
 }

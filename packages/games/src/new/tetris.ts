@@ -12,9 +12,18 @@
  * @author MathAid
  */
 
-import type { IGame, IPresentationContext, ISimulationContext } from '@games/loop';
+import type {
+  IAudioSink,
+  IGame,
+  IInputState,
+  IPresentationContext,
+  ISimulationContext,
+  PresentSignal,
+  StepSignal,
+} from '@games/loop';
 import { Mulberry, type Color, type Rect } from '@games/math';
 import type { IFrameBuilder } from '@games/render';
+import type { IStatefulGame, Scene } from './scene';
 import { COLORS, PIECE_TYPES, SHAPES, rotate, type Mino, type PieceType } from './tetromino';
 
 /** Board width, in cells. */
@@ -31,6 +40,18 @@ const ORIGIN_Y = 540;
 const BACKGROUND: Color = { r: 0.07, g: 0.07, b: 0.1, a: 1 };
 /** The board border colour. */
 const BORDER: Color = { r: 0.5, g: 0.5, b: 0.55, a: 1 };
+
+/** Pause-menu text colour. */
+const MENU_TEXT: Color = { r: 0.9, g: 0.9, b: 0.9, a: 1 };
+/** Pause-menu highlight (selected item) colour. */
+const MENU_HIGHLIGHT: Color = { r: 1, g: 0.85, b: 0.3, a: 1 };
+/** Pause-menu dim (hint) colour. */
+const MENU_DIM: Color = { r: 0.55, g: 0.55, b: 0.6, a: 1 };
+
+/** Selectable gravity speeds (steps between falls). */
+const SPEEDS = [10, 20, 30, 60] as const;
+/** Selectable master volumes. */
+const VOLUMES = [0, 0.25, 0.5, 0.75, 1] as const;
 
 /**
  * @summary The logical actions Tetris reads, as engine-agnostic action ids.
@@ -50,6 +71,158 @@ export const TETRIS_ACTIONS = {
   hardDrop: 'hard-drop',
   pause: 'pause',
 } as const;
+
+/**
+ * @summary Clamp a value to the closed interval `[0, 1]`.
+ * @param value - The value to clamp.
+ * @return `value` bounded to `[0, 1]`.
+ * @author MathAid
+ */
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
+/**
+ * @summary The scoring result of one clear: points, combo delta, and deluxe points.
+ * @author MathAid
+ */
+export interface ClearScore {
+  /** Points to add to the total score. */
+  readonly points: number;
+  /** Combo-meter delta to add (before clamping). */
+  readonly combo: number;
+  /** Points attributed to the cascade ("deluxe") stacking bonus. */
+  readonly deluxe: number;
+}
+/**
+ * @summary a metric within a grid
+ * @description A metric for a given position (min, max, average, other aggregates)
+ * of a cell/mino on the tetris board (or tetromino local) coordinate space
+ *
+ * @example
+ */
+export interface IPositionMetric {
+  /**
+   * The minimum position value
+   *
+   * e.g the max row in a tetromino
+   */
+  value: number;
+  /** The position index of {@linkcode IPositionMetric.value} */
+  index: number;
+}
+/**
+ * @summary The range of a part of a cell
+ * @description The range of a given column or row of a mino in the tetris board
+ * (or tetromino local) coordinate space
+ *
+ * @example
+ * const columnRange = metrics.col;
+ *
+ * @see {@link IMinoMetric}
+ */
+export interface IPositionRangeMetrics {
+  /**
+   * The maximum value and index
+   */
+  max: IPositionMetric;
+  /**
+   * The minimum value and index
+   */
+  min: IPositionMetric;
+}
+/**
+ * @summary Metrics for a given cell in a tetromino
+ *
+ * @example
+ * const { cells } = getActivePiece() as ActivePiece;
+ * const metrics = cells.reduce((metrics, cell, cellIndex) => {
+ *   metrics.row ??= { max: {}, min: {} } as IPositionRangeMetrics;
+ *   metrics.col ??= { max: {}, min: {} } as IPositionRangeMetrics;
+ *
+ *   // Evaluate the row
+ *   metrics.row.max.value = Math.max(metrics.row.max.value ?? 0, cell.row);
+ *   metrics.row.max.index = metrics.row.max.value <= cell.row ? metrics.row.max.index ?? 0 : cellIndex;
+ *   metrics.row.min.value = Math.min(metrics.row.min.value ?? 0, cell.row);
+ *   metrics.row.min.index = metrics.row.min.value >= cell.row ? metrics.row.min.index ?? 0 : cellIndex;
+ *
+ *   // Evaluate the col
+ *   metrics.col.max.value = Math.max(metrics.col.max.value ?? 0, cell.col);
+ *   metrics.col.max.index = metrics.col.max.value <= cell.col ? metrics.col.max.index ?? 0 : cellIndex;
+ *   metrics.col.min.value = Math.min(metrics.col.min.value ?? 0, cell.col);
+ *   metrics.col.min.index = metrics.col.min.value >= cell.col ? metrics.col.min.index ?? 0 : cellIndex;
+ *
+ *   return metrics;
+ * }, {} as IMinoMetric);
+ */
+export interface IMinoMetric {
+  /** The metrics for this row */
+  row: IPositionRangeMetrics;
+  /** The metrics for this column */
+  col: IPositionRangeMetrics;
+}
+
+/**
+ * @summary Score a clear under the four cumulative Tetris rules.
+ *
+ * @description
+ * The rules stack in one lock:
+ * - **Line cleared** — `+1` point per line, `+0.05` combo.
+ * - **Multi-line lock** — `+1` stacking on the base (so `L` lines → `L + 1`), `+0.25` combo.
+ * - **Full clean** — `3+` lines on an emptied board → `×2` base (`L × 2`), `+0.75` combo.
+ * - **Deluxe (cascade)** — each successive cascade wave adds an incrementing stacking bonus
+ *   (`+1`, `+2`, `+3`, …) and `+0.25` combo; the bonuses are summed into `deluxe`.
+ *
+ * @param lines - Total lines cleared (including cascade waves).
+ * @param cascadeWaves - Number of cascade waves beyond the initial clear (`0` for a plain clear).
+ * @param fullClean - Whether the board is empty after the clear with `3+` lines.
+ * @return The points, combo delta, and deluxe bonus.
+ * @author MathAid
+ */
+export function scoreClear(lines: number, cascadeWaves: number, fullClean: boolean): ClearScore {
+  let points = lines; // base: +1 per line
+  let combo = 0;
+  let deluxe = 0;
+
+  if (fullClean) {
+    points = lines * 2;
+    combo += 0.75;
+  } else if (lines >= 2) {
+    points = lines + 1;
+    combo += 0.25;
+  } else {
+    combo += 0.05;
+  }
+
+  for (let wave = 1; wave <= cascadeWaves; wave++) {
+    deluxe += wave;
+    combo += 0.25;
+  }
+  points += deluxe;
+
+  return { points, combo, deluxe };
+}
+
+/**
+ * @summary A read-only snapshot of Tetris scoring and progress metrics.
+ * @author MathAid
+ */
+export interface TetrisMetrics {
+  /** Deluxe (cascade) points earned so far this session. */
+  readonly deluxePoints: number;
+  /** All-time high deluxe points this session. */
+  readonly deluxeHigh: number;
+  /** Total points this session. */
+  readonly totalPoints: number;
+  /** All-time high total points this session. */
+  readonly totalHigh: number;
+  /** The combo meter, clamped to `[0, 1]`. */
+  readonly combo: number;
+  /** Number of full-board clears (full cleans) this session. */
+  readonly boardClears: number;
+  /** All-time high board-clear count this session. */
+  readonly boardClearsHigh: number;
+}
 
 /**
  * @summary A seven-bag randomiser: each of the seven pieces appears once per shuffle.
@@ -117,17 +290,27 @@ interface ActivePiece {
  * @see {@link IGame}
  * @author MathAid
  */
-export class Tetris implements IGame<IFrameBuilder> {
-  readonly #gravitySteps: number;
-  readonly #bag: Bag;
+export class Tetris implements IStatefulGame<IFrameBuilder> {
+  #gravitySteps: number;
+  #bag: Bag;
   readonly #board: (Color | null)[][] = [];
   #current: ActivePiece;
   #next: ActivePiece;
   #stepCounter = 0;
   #linesCleared = 0;
+  #score = 0;
+  #combo = 0;
+  #deluxePoints = 0;
+  #boardClears = 0;
+  #highScore = 0;
+  #highDeluxe = 0;
+  #highClears = 0;
+  #seed: number;
+  #volume = 0.5;
+  #menuIndex = 0;
+  #audio: IAudioSink | null = null;
 
   #paused: boolean;
-  // #score: number;
 
   /**
    * @summary Construct a Tetris game.
@@ -137,37 +320,72 @@ export class Tetris implements IGame<IFrameBuilder> {
    */
   constructor(seed = 1, gravitySteps = 30) {
     this.#gravitySteps = gravitySteps;
+    this.#seed = seed;
     this.#bag = new Bag(Mulberry.mulberry32(seed));
     for (let row = 0; row < ROWS; row++) this.#board.push(new Array<Color | null>(COLS).fill(null));
-    this.#current = this.#spawn(this.#bag.next());
-    this.#next = this.#spawn(this.#bag.next());
+    this.#current = this.#currentFrom(this.#spawnNext(this.#bag.next()));
+    this.#next = this.#spawnNext(this.#bag.next());
 
     this.#paused = false;
   }
 
   /**
+   * @summary The game's current scene.
+   * @author MathAid
+   */
+  get scene(): Scene {
+    return this.#paused ? 'paused' : 'playing';
+  }
+
+  /**
+   * @summary A read-only snapshot of scoring and progress metrics.
+   * @author MathAid
+   */
+  get metrics(): TetrisMetrics {
+    return {
+      deluxePoints: this.#deluxePoints,
+      deluxeHigh: this.#highDeluxe,
+      totalPoints: this.#score,
+      totalHigh: this.#highScore,
+      combo: this.#combo,
+      boardClears: this.#boardClears,
+      boardClearsHigh: this.#highClears,
+    };
+  }
+
+  //---------------------------------------------------------------------------
+  // #region Public subroutines
+  //---------------------------------------------------------------------------
+  /**
    * @summary Advance the game by one fixed step.
    * @param context - Timing, metrics, and the frame's logical input.
    * @author MathAid
    */
-  step(context: ISimulationContext): void {
+  step(context: ISimulationContext): StepSignal {
     const input = context.input;
-    if (input.wasPressed(TETRIS_ACTIONS.pause)) this.#pause();
-    if (!this.#paused) {
-      if (input.wasPressed(TETRIS_ACTIONS.rotate)) this.#rotate();
-      if (input.wasPressed(TETRIS_ACTIONS.moveLeft)) this.#move(-1);
-      if (input.wasPressed(TETRIS_ACTIONS.moveRight)) this.#move(1);
-      if (input.wasPressed(TETRIS_ACTIONS.hardDrop)) this.#hardDrop();
+    this.#audio = context.audio;
 
-      this.#stepCounter++;
-      const interval = input.isDown(TETRIS_ACTIONS.softDrop)
-        ? Math.max(1, Math.floor(this.#gravitySteps / 4))
-        : this.#gravitySteps;
-      if (this.#stepCounter >= interval) {
-        this.#stepCounter = 0;
-        this.#fall();
-      }
+    if (this.#isPressed(input, TETRIS_ACTIONS.pause)) {
+      this.#pause();
+      return this.#paused ? 'pause' : 'resume';
     }
+    if (this.#paused) return this.#menuStep(input);
+
+    if (input.wasPressed(TETRIS_ACTIONS.rotate)) this.#rotate();
+    if (input.wasPressed(TETRIS_ACTIONS.moveLeft)) this.#move(-1);
+    if (input.wasPressed(TETRIS_ACTIONS.moveRight)) this.#move(1);
+    if (input.wasPressed(TETRIS_ACTIONS.hardDrop)) this.#hardDrop();
+
+    this.#stepCounter++;
+    const interval = input.isDown(TETRIS_ACTIONS.softDrop)
+      ? Math.max(1, Math.floor(this.#gravitySteps / 4))
+      : this.#gravitySteps;
+    if (this.#stepCounter >= interval) {
+      this.#stepCounter = 0;
+      this.#combo = clamp01(this.#combo - 0.001);
+      this.#fall();
+    }
+    return 'continue';
   }
 
   /**
@@ -175,30 +393,17 @@ export class Tetris implements IGame<IFrameBuilder> {
    * @param context - The interpolation factor and the frame builder to write into.
    * @author MathAid
    */
-  present(context: IPresentationContext<IFrameBuilder>): void {
+  present(context: IPresentationContext<IFrameBuilder>): PresentSignal {
     const { frame } = context;
+    if (this.#paused) {
+      this.#drawMenu(frame);
+      return 'reduced';
+    }
+
     frame.clear(BACKGROUND);
 
-    for (let row = 0; row < ROWS; row++) {
-      for (let col = 0; col < COLS; col++) {
-        const color = this.#board[row][col];
-        if (color !== null) {
-          frame.rect(this.#cellRect(col, row), color, {
-            color: { r: 1, g: 1, b: 1, a: 1 },
-            width: 1,
-          });
-        }
-      }
-    }
-
-    for (const cell of this.#current.cells) {
-      if (cell.row >= 0) {
-        frame.rect(this.#cellRect(cell.col, cell.row), COLORS[this.#current.type], {
-          color: { r: 1, g: 1, b: 1, a: 1 },
-          width: 1,
-        });
-      }
-    }
+    this.#drawFallenMinos(frame);
+    this.#drawFallingTetromino(frame);
 
     this.#drawNext(frame);
     frame.rect(
@@ -206,6 +411,44 @@ export class Tetris implements IGame<IFrameBuilder> {
       undefined,
       { color: BORDER, width: 1 },
     );
+    return 'full';
+  }
+  // #endregion
+
+  //---------------------------------------------------------------------------
+  // #region Render
+  //---------------------------------------------------------------------------
+  /**
+   * Draws the current falling tetromino on the board
+   * @param frame the canvas on which to draw
+   */
+  #drawFallingTetromino(frame: IFrameBuilder): void {
+    for (const cell of this.#current.cells) {
+      if (cell.row >= 0) {
+        frame.rect(this.#cellRect(cell.col, cell.row), COLORS[this.#current.type], {
+          color: BORDER,
+          width: 1,
+        });
+      }
+    }
+  }
+
+  /**
+   * Draws the fallen minos on the board
+   * @param frame the canvas on which to draw
+   */
+  #drawFallenMinos(frame: IFrameBuilder): void {
+    for (let row = 0; row < ROWS; row++) {
+      for (let col = 0; col < COLS; col++) {
+        const color = this.#board[row][col];
+        if (color !== null) {
+          frame.rect(this.#cellRect(col, row), color, {
+            color: BORDER,
+            width: 1,
+          });
+        }
+      }
+    }
   }
 
   /**
@@ -216,19 +459,82 @@ export class Tetris implements IGame<IFrameBuilder> {
   #drawNext(frame: IFrameBuilder): void {
     const boxX = ORIGIN_X + COLS * TILE + 32;
     const boxY = ORIGIN_Y + 32;
-    frame.rect({ x: boxX - 1, y: boxY - 1, width: 5 * TILE, height: 3 * TILE }, undefined, {
+    // Subtract 1 logical pixel, so that the border/stroke is drawn outside of the area not within it
+    const nextRect = { x: boxX - 1, y: boxY - 1, width: 5 * TILE, height: 5 * TILE };
+    frame.rect(nextRect, undefined, {
       color: BORDER,
       width: 1,
     });
-    for (const cell of this.#next.cells) {
+    this.#drawNextTetromino(this.#clipBorder(nextRect), frame);
+  }
+
+  /**
+   * Clips the specified rect, removing it's border
+   * @param {Rect} rect The rectangle to be clipped
+   * @param {number} [borderWidth=1] The thickness of the border(s) to be clipped out. The default is `1`
+   * @returns {Rect} The clipped rect
+   */
+  #clipBorder(rect: Rect, borderWidth: number = 1): Rect {
+    return {
+      ...rect,
+      x: rect.x + borderWidth,
+      y: rect.y + borderWidth,
+    };
+  }
+
+  /**
+   * @summary Draws the next tetromino contained within the next board
+   * @param nextRect The bounding box (excluding any outline/border) of the next area
+   * @param frame The canvas on which to draw the resulting minos
+   */
+  #drawNextTetromino(nextRect: Rect, frame: IFrameBuilder): void {
+    const { x: boxX, y: boxY } = nextRect;
+    for (let i = 0; i < this.#next.cells.length; i++) {
+      const cell = this.#next.cells[i];
       frame.rect(
         { x: boxX + cell.col * TILE, y: boxY + (cell.row + 1) * TILE, width: TILE, height: TILE },
         COLORS[this.#next.type],
-        { color: { r: 1, g: 1, b: 1, a: 1 }, width: 1 },
+        { color: BORDER, width: 1 },
       );
     }
   }
 
+  /**
+   * @summary Draw the pause menu over the board.
+   * @param frame - The frame builder to write into.
+   * @author MathAid
+   */
+  #drawMenu(frame: IFrameBuilder): void {
+    frame.clear(BACKGROUND);
+    const items = this.#menuItems();
+
+    frame.text('PAUSED', { x: ORIGIN_X, y: 40 }, { color: MENU_HIGHLIGHT, size: 18 });
+    frame.text(
+      `score ${this.#score} · combo ${this.#combo.toFixed(3)}`,
+      { x: ORIGIN_X, y: 66 },
+      { color: MENU_TEXT, size: 12 },
+    );
+
+    items.forEach((item, i) => {
+      const selected = i === this.#menuIndex;
+      frame.text(
+        `${selected ? '>' : ' '} ${item.label}: ${item.value}`,
+        { x: ORIGIN_X, y: 96 + i * 22 },
+        { color: selected ? MENU_HIGHLIGHT : MENU_TEXT, size: 13 },
+      );
+    });
+
+    frame.text(
+      '↑/↓ select · ←/→ change · Esc resume',
+      { x: ORIGIN_X, y: 96 + items.length * 22 + 10 },
+      { color: MENU_DIM, size: 11 },
+    );
+  }
+  // #endregion
+
+  //---------------------------------------------------------------------------
+  // #region Simulate Gameplay
+  //---------------------------------------------------------------------------
   /**
    * @summary The on-screen rectangle for a board cell.
    * @param col - Board column.
@@ -241,17 +547,77 @@ export class Tetris implements IGame<IFrameBuilder> {
   }
 
   /**
-   * @summary Create a piece at its spawn position.
+   * @summary Create a next piece at its spawn position.
    * @param type - The piece type.
    * @return The piece, translated to the board's top-centre.
    * @author MathAid
    */
-  #spawn(type: PieceType): ActivePiece {
-    return { type, cells: SHAPES[type].map((m) => ({ col: m.col + 3, row: m.row - 1 })) };
+  #spawnNext(type: PieceType): ActivePiece {
+    return { type, cells: SHAPES[type] } as ActivePiece;
   }
 
-  #pause() {
-    this.#paused = !this.#paused;
+  /**
+   * @summary Computes tetromino ranges
+   * @description Helper method for computing the metrics, such as ranges,
+   * of a given tetromino, in it's local coordinate space
+   * 
+   * @param {Mino[]} cells The cells of a tetromino, typically retrieved via {@linkcode ActivePiece.cells}
+   * @returns {IMinoMetric} the computed metrics
+   */
+  #metrics(cells: Mino[]): IMinoMetric {
+    return cells.reduce((metrics, cell, cellIndex) => {
+      metrics.row ??= { max: {}, min: {} } as IPositionRangeMetrics;
+      metrics.col ??= { max: {}, min: {} } as IPositionRangeMetrics;
+
+      // Evaluate the row
+      metrics.row.max.value = Math.max(metrics.row.max.value ?? 0, cell.row);
+      metrics.row.max.index =
+        metrics.row.max.value <= cell.row ? (metrics.row.max.index ?? 0) : cellIndex;
+      metrics.row.min.value = Math.min(metrics.row.min.value ?? 0, cell.row);
+      metrics.row.min.index =
+        metrics.row.min.value >= cell.row ? (metrics.row.min.index ?? 0) : cellIndex;
+
+      // Evaluate the col
+      metrics.col.max.value = Math.max(metrics.col.max.value ?? 0, cell.col);
+      metrics.col.max.index =
+        metrics.col.max.value <= cell.col ? (metrics.col.max.index ?? 0) : cellIndex;
+      metrics.col.min.value = Math.min(metrics.col.min.value ?? 0, cell.col);
+      metrics.col.min.index =
+        metrics.col.min.value >= cell.col ? (metrics.col.min.index ?? 0) : cellIndex;
+
+      return metrics;
+    }, {} as IMinoMetric);
+  }
+
+  /**
+   * @summary Constructs a board piece from the piece in the next queue
+   * @description Translates the tiles of the given piece so that it fits
+   * into the top-center section of the main board
+   * @param nextSpawn the value from which the current is created
+   * @returns {ActivePiece} the argument translated from the coordinate
+   * space of the 'next piece board' to the main board
+   */
+  #currentFrom(nextSpawn: ActivePiece): ActivePiece {
+    const { col, row } = this.#metrics(nextSpawn.cells);
+    const tetrominoWidth = col.max.value;
+    return {
+      ...nextSpawn,
+      // Reposition the current at the top-center
+      cells: nextSpawn.cells.map((m) => ({
+        col: m.col + Math.floor(COLS / 2 - tetrominoWidth / 2),
+        row: m.row - row.max.value - 1,
+      })),
+    };
+  }
+
+  /**
+   * @summary Rebuild the piece bag from the current seed and respawn the queue.
+   * @author MathAid
+   */
+  #rebuildBag(): void {
+    this.#bag = new Bag(Mulberry.mulberry32(this.#seed));
+    this.#current = this.#currentFrom(this.#spawnNext(this.#bag.next()));
+    this.#next = this.#spawnNext(this.#bag.next());
   }
 
   /**
@@ -327,25 +693,133 @@ export class Tetris implements IGame<IFrameBuilder> {
       for (const row of this.#board) row.fill(null);
       this.#linesCleared = 0;
     } else {
-      this.#clearLines();
+      const lines = this.#clearLines();
+      if (lines > 0) this.#applyScore(lines);
     }
 
-    this.#current = this.#next;
-    this.#next = this.#spawn(this.#bag.next());
+    this.#current = this.#currentFrom(this.#next);
+    this.#next = this.#spawnNext(this.#bag.next());
+  }
+
+  /**
+   * @summary Whether every board cell is empty.
+   * @return `true` when the board holds no locked cells.
+   * @author MathAid
+   */
+  #isEmptyBoard(): boolean {
+    return this.#board.every((row) => row.every((cell) => cell === null));
   }
 
   /**
    * @summary Remove completed rows, shifting everything above them down.
+   * @return The number of rows cleared.
    * @author MathAid
    */
-  #clearLines(): void {
+  #clearLines(): number {
+    let lines = 0;
     for (let row = ROWS - 1; row >= 0; row--) {
       if (this.#board[row].every((cell) => cell !== null)) {
         this.#board.splice(row, 1);
         this.#board.unshift(new Array<Color | null>(COLS).fill(null));
         this.#linesCleared++;
+        lines++;
         row++;
       }
     }
+    return lines;
   }
+
+  #isPressed(input: IInputState, key: string) {
+    return input.wasPressed(key) || input.isDown(key);
+  }
+
+  #pause() {
+    this.#paused = !this.#paused;
+    if (this.#paused) this.#menuIndex = 0;
+  }
+
+  /**
+   * @summary Apply the four cumulative scoring rules to a clear and update the combo meter.
+   * @param lines - Total lines cleared this lock.
+   * @author MathAid
+   */
+  #applyScore(lines: number): void {
+    const fullClean = lines >= 3 && this.#isEmptyBoard();
+    const { points, combo, deluxe } = scoreClear(lines, 0, fullClean);
+
+    this.#score += points;
+    this.#combo = clamp01(this.#combo + combo);
+    this.#deluxePoints += deluxe;
+    if (fullClean) this.#boardClears++;
+
+    this.#highScore = Math.max(this.#highScore, this.#score);
+    this.#highDeluxe = Math.max(this.#highDeluxe, this.#deluxePoints);
+    this.#highClears = Math.max(this.#highClears, this.#boardClears);
+  }
+  // #endregion
+
+  //---------------------------------------------------------------------------
+  // #region Simulate Menu
+  //---------------------------------------------------------------------------
+  /**
+   * @summary Navigate and edit the pause menu; returns `'resume'` when the player exits.
+   * @param input - The menu-frame input snapshot.
+   * @return `'continue'` to stay paused, or `'resume'` to hand control back to the engine.
+   * @author MathAid
+   */
+  #menuStep(input: IInputState): StepSignal {
+    const length = this.#menuItems().length;
+    if (this.#isPressed(input, TETRIS_ACTIONS.softDrop))
+      this.#menuIndex = (this.#menuIndex + 1) % length;
+    if (this.#isPressed(input, TETRIS_ACTIONS.rotate))
+      this.#menuIndex = (this.#menuIndex - 1 + length) % length;
+    if (this.#isPressed(input, TETRIS_ACTIONS.moveLeft)) this.#cycleSetting(-1);
+    if (this.#isPressed(input, TETRIS_ACTIONS.moveRight)) this.#cycleSetting(1);
+    return 'continue';
+  }
+
+  /**
+   * @summary The pause menu's items: label and current value, in display order.
+   * @return The menu items.
+   * @author MathAid
+   */
+  #menuItems(): { readonly label: string; readonly value: string }[] {
+    return [
+      { label: 'Speed', value: `${this.#gravitySteps} steps` },
+      { label: 'Volume', value: `${Math.round(this.#volume * 100)}%` },
+      { label: 'Seed', value: `${this.#seed}` },
+      { label: 'Colours', value: 'default' },
+      { label: 'RNG', value: 'mulberry32' },
+      { label: 'Keymap', value: '←→ move · ↑ rotate · ↓ drop · Space hard · Esc pause' },
+    ];
+  }
+
+  /**
+   * @summary Cycle the selected setting by one step.
+   * @param dir - `+1` or `-1`.
+   * @author MathAid
+   */
+  #cycleSetting(dir: number): void {
+    switch (this.#menuIndex) {
+      case 0: {
+        const i = SPEEDS.indexOf(this.#gravitySteps as (typeof SPEEDS)[number]);
+        this.#gravitySteps = SPEEDS[(i + dir + SPEEDS.length) % SPEEDS.length];
+        break;
+      }
+      case 1: {
+        const i = VOLUMES.indexOf(this.#volume as (typeof VOLUMES)[number]);
+        this.#volume = VOLUMES[(i + dir + VOLUMES.length) % VOLUMES.length];
+        this.#audio?.setVolume(this.#volume);
+        break;
+      }
+      case 2: {
+        this.#seed = ((this.#seed - 1 + dir + 9) % 9) + 1;
+        this.#rebuildBag();
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  // #endregion
 }

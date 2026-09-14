@@ -1,6 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { Tetris } from '@games/games';
+import { scoreClear, Tetris } from '@games/games';
 import { noInput, present, step } from './util';
+
+describe('scoreClear', () => {
+  it('scores a single line clear', () => {
+    expect(scoreClear(1, 0, false)).toEqual({ points: 1, combo: 0.05, deluxe: 0 });
+  });
+
+  it('scores a multi-line lock (4 rows -> 5 points)', () => {
+    expect(scoreClear(4, 0, false)).toEqual({ points: 5, combo: 0.25, deluxe: 0 });
+  });
+
+  it('scores a full clean (3 rows on an empty board -> 6 points)', () => {
+    expect(scoreClear(3, 0, true)).toEqual({ points: 6, combo: 0.75, deluxe: 0 });
+  });
+
+  it('stacks deluxe cascade bonuses (+1, +2)', () => {
+    expect(scoreClear(3, 2, false)).toEqual({ points: 7, combo: 0.75, deluxe: 3 });
+  });
+});
 
 describe('Tetris', () => {
   it('emits a clear followed by piece rects', () => {

@@ -118,6 +118,9 @@ rendering only via `present` commands.
   decision on whether to wire it in).
 - **Stale doc references** — comments referencing deleted legacy types (`IGamePerformance`,
   `DeltaAccumulator`, `GamePerformance`) corrected to `IEngine`/`Engine`.
+- **Loop rescheduling after `stop()`** — an in-flight `MessageChannel` delivery could fire after
+  `stop()`, and the loop unconditionally rescheduled, reviving the loop and hanging the process.
+  Added a `#running` guard so the loop only reschedules while running.
 
 ---
 
@@ -129,3 +132,71 @@ rendering only via `present` commands.
   Snake (wall-wrap/turn), Space Invaders (shooting/movement), and every PRNG (determinism + range).
 - **Vitest suite:** `vitest.config.ts` + 9 test files across `loop`/`math`/`render`/`games`
   (written; run locally with `pnpm install && pnpm test`).
+
+---
+
+## 10. Engine evolution (`dev` branch)
+
+Landed on the transient `dev` branch (see `PROPOSALS.md` for the step-by-step plans):
+
+- **Generic schedule handle** (§6.2) — `IScheduleHandle<T>`, `IScheduler<T>`, `IHostLoop<T>` are now
+  generic over the token type; `rAFScheduler` is `IScheduler<number>`, `ManualScheduler` is
+  `IScheduler<null>`.
+- **Driver-agnostic simulation** (§1) — `ISimulationContext.clock` widened to `IClock` and `dt`
+  added; `ISimulationDriver` gained `interpolation()`/`reset()` and dropped `clock`/`canStep`;
+  `FixedTimestepDriver` re-anchored internally. New `timestep-drivers.ts`:
+  `VariableTimestepDriver`, `CappedVariableTimestepDriver`, `AdaptiveTimestepDriver` (interval
+  tracks a smoothed frame-time EMA, clamped to `[target/4, target×4]`), `EventDrivenDriver`.
+- **Control signals** (§4) — `StepSignal` (`'continue' | 'pause' | 'resume' | 'skip' | 'throttle'`)
+  and `PresentSignal` (`'full' | 'reduced' | 'none'`) in `simulation.type.ts`; `step`/`present` may
+  return them (a `void` return means `'continue'`/`'full'`). `ISimulationDriver.advance` now returns
+  `StepResult { steps, signal }`; `FixedTimestepDriver` stops stepping on `'skip'`/`'pause'`.
+  `Engine` interprets signals via `#stepScale`/`#renderScale` (throttle halves the step/render rate,
+  `'none'` stops rendering) while remaining the single authority over pause.
+- **Dual pause (§2)** — the engine keeps `IEngine.paused` as the loop-cadence authority, and the game
+  keeps its own scene pause via `step`'s `'pause'`/`'resume'` signals. While paused the engine runs a
+  throttled GUI loop (`GUI_INTERVAL_NS`, 10 Hz): a menu-navigation `step` (`dt: 0`) plus a
+  `present`, so a pause menu stays interactive and can request `'resume'` — which returns authority
+  to the engine and resets the clock.
+- **Live metrics (§3)** — `LiveMetrics { fps, alpha, dtNanos, pendingSteps, elapsedNanos }` in
+  `simulation.type.ts`; `ISimulationDriver` gained `lastDt`/`pendingSteps` accessors (all four
+  drivers implement them). `Engine` exposes a `live` getter and emits a per-frame `metrics` event
+  (`EngineEvents.metrics`) for zero-polling HUDs.
+- **Host alternatives (§6.3)** — `host/manual-host-loop.ts` (`ManualHostLoop`, `IHostLoop<null>`),
+  `host/message-channel-scheduler.ts` (`MessageChannelScheduler`, `IScheduler<MessageChannel>`),
+  `host/node-host-loop.ts` (`NodeHostLoop`, `IHostLoop<MessageChannel>`), `host/replay-host-loop.ts`
+  (`ReplayHostLoop`, `IHostLoop<number>`, synchronous `Timestamp[]` playback), and
+  `host/worker-host-loop.ts` (`WorkerHostLoop`, a worker-oriented alias of `NodeHostLoop`).
+- **Audio (§5.2)** — `IAudioSink` contract (`play`/`stop`/`setVolume`) in `types/audio.type.ts`;
+  `NoopAudioSink`, `RecordingAudioSink`, and `WebAudioSink` (Web Audio API) in `src/audio/`.
+  `ISimulationContext.audio` threads the sink to games declaratively; `ISimulationDriver.setAudio`
+  and `IEngine.setAudio` bind it (with an `audioChanged` event).
+- **Visual sprites (§5.3)** — `ISpriteRegistry` + `SpriteRegistry` (PNG/JPEG/GIF/WebP decoding) in
+  `render/sprite-registry.ts`; `Canvas2DRenderer.setSprites` resolves `{ kind: 'sprite' }` through
+  the registry and `drawImage`s it (magenta placeholder when unbound/unloaded).
+- **App controls (§7)** — `apps/web/scripts/main.ts` now reads `AppSettings` from the URL query
+  string (`game`, `fps`, `fpsHistory`, `width`, `height`, `host`, `simulator`, `inputName`) and
+  composes the matching `IHostLoop` (`browser`/`node`/`manual`/`replay`) and `ISimulationDriver`
+  (`fixed`/`variable`/`event-driven`). It renders a live metrics HUD (via the `metrics` event), a
+  read-only key map, and re-`resize`s the canvas to the configured resolution; the game selector
+  rewrites the query string and reloads.
+- **Game states (§8)** — `games/new/scene.ts` defines `Scene` (`'playing' | 'paused' |
+  'transitioning' | 'gameOver'`), `IStatefulGame<F>` (an `IGame` plus a read-only `scene` and an
+  optional recursive `transition`), and `LevelTransition<F>` — a recursive level sequence that
+  hands off to the next level (itself a `LevelTransition`) when the current one reports
+  `gameOver`. `Tetris`, `Snake`, and `SpaceInvaders` implement `IStatefulGame<IFrameBuilder>` and
+  report their `scene` (Snake and Space Invaders now report `gameOver`).
+- **Tetris scoring + combo + metrics (§9.1–9.3)** — a pure, tested `scoreClear` in `tetris.ts`
+  implements the four cumulative rules (single `+1`/`+0.05`, multi-line `L+1`/`+0.25`, full clean
+  `L×2`/`+0.75`, deluxe cascade `+1,+2,…`/`+0.25` each). `Tetris` tracks score, a `[0,1]` combo
+  meter (adds on clears, `−0.001` per fall tick, clamped), deluxe points, board-clear count, and
+  their in-session highs, exposed via a read-only `metrics` getter.
+- **Tetris pause menu (§9.4)** — `step`/`present` now route by scene and return `StepSignal`/
+  `PresentSignal` (the pause toggle returns `'pause'`/`'resume'`; the menu presents `'reduced'`).
+  The declarative menu edits speed, volume, and seed (`↑`/`↓` select, `←`/`→` change, `Esc`
+  resume), shows colours/RNG/keymap read-only, and applies volume via `context.audio` and the seed
+  by rebuilding the bag.
+- **Snake pause menu (§10)** — `Snake` gains a `pause` action and a `paused` scene, with
+  `step`/`present` returning `StepSignal`/`PresentSignal` like Tetris. Its menu toggles `mode`
+  (`arcade` — constant speed | `level` — score-ramped speed), `sprites` (rect ↔ sprite rendering),
+  snake/egg colour palettes, stage themes, and obstacles (a fixed centre block the snake dies on).

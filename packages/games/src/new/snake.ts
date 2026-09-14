@@ -12,8 +12,16 @@
  */
 
 import { Mulberry, type Color } from '@games/math';
-import type { IGame, IPresentationContext, ISimulationContext } from '@games/loop';
+import type {
+  IGame,
+  IInputState,
+  IPresentationContext,
+  ISimulationContext,
+  PresentSignal,
+  StepSignal,
+} from '@games/loop';
 import type { IFrameBuilder } from '@games/render';
+import type { IStatefulGame, Scene } from './scene';
 
 /** Grid width, in cells. */
 const COLS = 20;
@@ -48,7 +56,53 @@ export const SNAKE_ACTIONS = {
   down: 'down',
   left: 'left',
   right: 'right',
+  pause: 'pause',
 } as const;
+
+/**
+ * @summary Snake body palettes as `[head, tail]` gradient endpoints.
+ * @author MathAid
+ */
+const SNAKE_PALETTES: readonly (readonly [Color, Color])[] = [
+  [HEAD_COLOR, TAIL_COLOR],
+  [{ r: 0.3, g: 0.6, b: 1, a: 1 }, { r: 0.1, g: 0.2, b: 0.5, a: 1 }],
+  [{ r: 1, g: 0.4, b: 0.7, a: 1 }, { r: 0.5, g: 0.1, b: 0.3, a: 1 }],
+];
+
+/**
+ * @summary Food (egg) colour palettes.
+ * @author MathAid
+ */
+const FOOD_PALETTES: readonly Color[] = [
+  FOOD_COLOR,
+  { r: 1, g: 0.75, b: 0.2, a: 1 },
+  { r: 0.3, g: 0.9, b: 0.4, a: 1 },
+];
+
+/**
+ * @summary Stage themes as `{ background, border }` colour pairs.
+ * @author MathAid
+ */
+const STAGE_THEMES: readonly { bg: Color; border: Color }[] = [
+  { bg: BACKGROUND, border: { r: 0.4, g: 0.45, b: 0.4, a: 1 } },
+  { bg: { r: 0.03, g: 0.03, b: 0.08, a: 1 }, border: { r: 0.3, g: 0.35, b: 0.55, a: 1 } },
+  { bg: { r: 0.08, g: 0.05, b: 0.03, a: 1 }, border: { r: 0.55, g: 0.35, b: 0.25, a: 1 } },
+];
+
+/** A fixed obstacle block placed in the centre when obstacles are enabled. */
+const OBSTACLES: readonly Cell[] = [
+  { col: 9, row: 9 },
+  { col: 10, row: 9 },
+  { col: 9, row: 10 },
+  { col: 10, row: 10 },
+];
+
+/** Pause-menu text colour. */
+const MENU_TEXT: Color = { r: 0.9, g: 0.9, b: 0.9, a: 1 };
+/** Pause-menu highlight (selected item) colour. */
+const MENU_HIGHLIGHT: Color = { r: 1, g: 0.85, b: 0.3, a: 1 };
+/** Pause-menu dim (hint) colour. */
+const MENU_DIM: Color = { r: 0.55, g: 0.55, b: 0.6, a: 1 };
 
 /**
  * @summary A grid cell.
@@ -106,7 +160,7 @@ function lerpColor(a: Color, b: Color, t: number): Color {
  * @see {@link IGame}
  * @author MathAid
  */
-export class Snake implements IGame<IFrameBuilder> {
+export class Snake implements IStatefulGame<IFrameBuilder> {
   readonly #moveSteps: number;
   readonly #rng: () => number;
   readonly #body: Cell[] = [];
@@ -116,6 +170,14 @@ export class Snake implements IGame<IFrameBuilder> {
   #stepCounter = 0;
   #score = 0;
   #gameOver = false;
+  #paused = false;
+  #menuIndex = 0;
+  #mode: 'arcade' | 'level' = 'arcade';
+  #sprites = false;
+  #snakePalette = 0;
+  #foodPalette = 0;
+  #stageTheme = 0;
+  #obstaclesEnabled = false;
 
   /**
    * @summary Construct a Snake game.
@@ -137,46 +199,69 @@ export class Snake implements IGame<IFrameBuilder> {
   }
 
   /**
-   * @summary Advance the game by one fixed step.
-   * @param context - Timing, metrics, and the frame's logical input.
+   * @summary The game's current scene.
    * @author MathAid
    */
-  step(context: ISimulationContext): void {
+  get scene(): Scene {
+    if (this.#paused) return 'paused';
+    if (this.#gameOver) return 'gameOver';
+    return 'playing';
+  }
+
+  /**
+   * @summary Advance the game by one fixed step.
+   * @param context - Timing, metrics, and the frame's logical input.
+   * @return `'continue'`, or `'pause'`/`'resume'` on a pause-menu toggle.
+   * @author MathAid
+   */
+  step(context: ISimulationContext): StepSignal {
     const input = context.input;
+    if (input.wasPressed(SNAKE_ACTIONS.pause)) {
+      this.#paused = !this.#paused;
+      if (this.#paused) this.#menuIndex = 0;
+      return this.#paused ? 'pause' : 'resume';
+    }
+    if (this.#paused) return this.#menuStep(input);
+
     if (input.wasPressed(SNAKE_ACTIONS.up)) this.#turn(UP);
     if (input.wasPressed(SNAKE_ACTIONS.down)) this.#turn(DOWN);
     if (input.wasPressed(SNAKE_ACTIONS.left)) this.#turn(LEFT);
     if (input.wasPressed(SNAKE_ACTIONS.right)) this.#turn(RIGHT);
 
     this.#stepCounter++;
-    if (this.#stepCounter >= this.#moveSteps) {
+    if (this.#stepCounter >= this.#effectiveMoveSteps()) {
       this.#stepCounter = 0;
       if (!this.#gameOver) this.#advance();
     }
+    return 'continue';
   }
 
   /**
    * @summary Describe the board, food, and snake as render commands.
    * @param context - The interpolation factor and the frame builder.
+   * @return `'full'`, or `'reduced'` when drawing the pause menu.
    * @author MathAid
    */
-  present(context: IPresentationContext<IFrameBuilder>): void {
+  present(context: IPresentationContext<IFrameBuilder>): PresentSignal {
     const { frame } = context;
-    frame.clear(BACKGROUND);
+    if (this.#paused) {
+      this.#drawMenu(frame);
+      return 'reduced';
+    }
 
-    frame.rect(this.#cellRect(this.#food.col, this.#food.row), FOOD_COLOR);
+    const theme = STAGE_THEMES[this.#stageTheme];
+    frame.clear(theme.bg);
 
-    const total = this.#body.length;
-    this.#body.forEach((cell, index) => {
-      const t = total === 1 ? 0 : index / (total - 1);
-      frame.rect(this.#cellRect(cell.col, cell.row), lerpColor(HEAD_COLOR, TAIL_COLOR, t));
-    });
+    this.#drawFood(frame);
+    this.#drawSnake(frame);
+    this.#drawObstacles(frame);
 
     frame.rect(
       { x: ORIGIN_X - 1, y: ORIGIN_Y - 1, width: COLS * TILE + 2, height: ROWS * TILE + 2 },
       undefined,
-      { color: { r: 0.4, g: 0.45, b: 0.4, a: 1 }, width: 1 },
+      { color: theme.border, width: 1 },
     );
+    return 'full';
   }
 
   /**
@@ -188,6 +273,164 @@ export class Snake implements IGame<IFrameBuilder> {
    */
   #cellRect(col: number, row: number) {
     return { x: ORIGIN_X + col * TILE, y: ORIGIN_Y + row * TILE, width: TILE, height: TILE };
+  }
+
+  /**
+   * @summary The sprite transform for a grid cell (position + `TILE` scale).
+   * @param cell - The cell to place a sprite at.
+   * @return A `Transform2D` covering the cell.
+   * @author MathAid
+   */
+  #spriteTransform(cell: Cell) {
+    return {
+      x: ORIGIN_X + cell.col * TILE,
+      y: ORIGIN_Y + cell.row * TILE,
+      scaleX: TILE,
+      scaleY: TILE,
+    };
+  }
+
+  /**
+   * @summary The move cadence, ramped by score in `'level'` mode.
+   * @return The effective steps between moves.
+   * @author MathAid
+   */
+  #effectiveMoveSteps(): number {
+    if (this.#mode === 'level') return Math.max(2, this.#moveSteps - Math.floor(this.#score / 5));
+    return this.#moveSteps;
+  }
+
+  /**
+   * @summary Draw the food (as a sprite or a rect, per the sprites setting).
+   * @param frame - The frame builder.
+   * @author MathAid
+   */
+  #drawFood(frame: IFrameBuilder): void {
+    if (this.#sprites) {
+      frame.sprite({ id: 'egg' }, this.#spriteTransform(this.#food));
+      return;
+    }
+    frame.rect(this.#cellRect(this.#food.col, this.#food.row), FOOD_PALETTES[this.#foodPalette]);
+  }
+
+  /**
+   * @summary Draw the snake body (as sprites or a rect gradient).
+   * @param frame - The frame builder.
+   * @author MathAid
+   */
+  #drawSnake(frame: IFrameBuilder): void {
+    const [head, tail] = SNAKE_PALETTES[this.#snakePalette];
+    const total = this.#body.length;
+    this.#body.forEach((cell, index) => {
+      const t = total === 1 ? 0 : index / (total - 1);
+      if (this.#sprites) {
+        frame.sprite({ id: index === 0 ? 'snake-head' : 'snake-body' }, this.#spriteTransform(cell));
+        return;
+      }
+      frame.rect(this.#cellRect(cell.col, cell.row), lerpColor(head, tail, t));
+    });
+  }
+
+  /**
+   * @summary Draw obstacles when enabled.
+   * @param frame - The frame builder.
+   * @author MathAid
+   */
+  #drawObstacles(frame: IFrameBuilder): void {
+    if (!this.#obstaclesEnabled) return;
+    for (const cell of OBSTACLES) {
+      frame.rect(this.#cellRect(cell.col, cell.row), { r: 0.5, g: 0.4, b: 0.3, a: 1 });
+    }
+  }
+
+  /**
+   * @summary Navigate and edit the pause menu.
+   * @param input - The menu-frame input snapshot.
+   * @return `'continue'` to stay paused (resume is handled by the pause toggle).
+   * @author MathAid
+   */
+  #menuStep(input: IInputState): StepSignal {
+    const length = this.#menuItems().length;
+    if (input.wasPressed(SNAKE_ACTIONS.down)) this.#menuIndex = (this.#menuIndex + 1) % length;
+    if (input.wasPressed(SNAKE_ACTIONS.up)) this.#menuIndex = (this.#menuIndex - 1 + length) % length;
+    if (input.wasPressed(SNAKE_ACTIONS.left)) this.#cycleSetting(-1);
+    if (input.wasPressed(SNAKE_ACTIONS.right)) this.#cycleSetting(1);
+    return 'continue';
+  }
+
+  /**
+   * @summary The pause menu's items: label and current value.
+   * @return The menu items.
+   * @author MathAid
+   */
+  #menuItems(): { readonly label: string; readonly value: string }[] {
+    return [
+      { label: 'Mode', value: this.#mode },
+      { label: 'Sprites', value: this.#sprites ? 'on' : 'off' },
+      { label: 'Snake colour', value: `palette ${this.#snakePalette + 1}` },
+      { label: 'Egg colour', value: `palette ${this.#foodPalette + 1}` },
+      { label: 'Stage', value: `theme ${this.#stageTheme + 1}` },
+      { label: 'Obstacles', value: this.#obstaclesEnabled ? 'on' : 'off' },
+    ];
+  }
+
+  /**
+   * @summary Cycle the selected setting.
+   * @param dir - `+1` or `-1` (toggles ignore the direction).
+   * @author MathAid
+   */
+  #cycleSetting(dir: number): void {
+    switch (this.#menuIndex) {
+      case 0:
+        this.#mode = this.#mode === 'arcade' ? 'level' : 'arcade';
+        break;
+      case 1:
+        this.#sprites = !this.#sprites;
+        break;
+      case 2:
+        this.#snakePalette = (this.#snakePalette + dir + SNAKE_PALETTES.length) % SNAKE_PALETTES.length;
+        break;
+      case 3:
+        this.#foodPalette = (this.#foodPalette + dir + FOOD_PALETTES.length) % FOOD_PALETTES.length;
+        break;
+      case 4:
+        this.#stageTheme = (this.#stageTheme + dir + STAGE_THEMES.length) % STAGE_THEMES.length;
+        break;
+      case 5:
+        this.#obstaclesEnabled = !this.#obstaclesEnabled;
+        break;
+      default:
+        break;
+    }
+  }
+
+  /**
+   * @summary Draw the pause menu.
+   * @param frame - The frame builder.
+   * @author MathAid
+   */
+  #drawMenu(frame: IFrameBuilder): void {
+    const theme = STAGE_THEMES[this.#stageTheme];
+    frame.clear(theme.bg);
+    const items = this.#menuItems();
+
+    frame.text('PAUSED', { x: ORIGIN_X, y: 24 }, { color: MENU_HIGHLIGHT, size: 18 });
+    frame.text(`score ${this.#score}`, { x: ORIGIN_X, y: 48 }, { color: MENU_TEXT, size: 12 });
+
+    items.forEach((item, i) => {
+      const selected = i === this.#menuIndex;
+      frame.text(
+        `${selected ? '>' : ' '} ${item.label}: ${item.value}`,
+        { x: ORIGIN_X, y: 76 + i * 22 },
+        { color: selected ? MENU_HIGHLIGHT : MENU_TEXT, size: 13 },
+      );
+    });
+
+    frame.text(
+      '↑/↓ select · ←/→ change · Esc resume',
+      { x: ORIGIN_X, y: 76 + items.length * 22 + 10 },
+      { color: MENU_DIM, size: 11 },
+    );
   }
 
   /**
@@ -215,8 +458,14 @@ export class Snake implements IGame<IFrameBuilder> {
     };
 
     const eats = nextHead.col === this.#food.col && nextHead.row === this.#food.row;
+    const hitsObstacle =
+      this.#obstaclesEnabled &&
+      OBSTACLES.some((o) => o.col === nextHead.col && o.row === nextHead.row);
     const collidable = eats ? this.#body : this.#body.slice(0, -1);
-    if (collidable.some((cell) => cell.col === nextHead.col && cell.row === nextHead.row)) {
+    if (
+      hitsObstacle ||
+      collidable.some((cell) => cell.col === nextHead.col && cell.row === nextHead.row)
+    ) {
       this.#gameOver = true;
       return;
     }

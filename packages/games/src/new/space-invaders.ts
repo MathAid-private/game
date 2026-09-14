@@ -15,6 +15,7 @@
 import { Mulberry, rectsIntersect, type Color, type Rect } from '@games/math';
 import type { IGame, IPresentationContext, ISimulationContext } from '@games/loop';
 import type { IFrameBuilder } from '@games/render';
+import type { IStatefulGame, Scene } from './scene';
 
 /** Play-field width, in logical pixels. */
 const PLAY_WIDTH = 400;
@@ -126,7 +127,7 @@ interface Invader {
  * @see {@link IGame}
  * @author MathAid
  */
-export class SpaceInvaders implements IGame<IFrameBuilder> {
+export class SpaceInvaders implements IStatefulGame<IFrameBuilder> {
   readonly #rng: () => number;
   readonly #invaders: Invader[] = [];
   readonly #bullets: Bullet[] = [];
@@ -154,6 +155,14 @@ export class SpaceInvaders implements IGame<IFrameBuilder> {
     const formationWidth = INVADER_COLS * (INVADER_WIDTH + INVADER_GAP_X) - INVADER_GAP_X;
     this.#formationX = PLAY_X + (PLAY_WIDTH - formationWidth) / 2;
     this.#playerX = PLAY_X + (PLAY_WIDTH - PLAYER_WIDTH) / 2;
+  }
+
+  /**
+   * @summary The game's current scene.
+   * @author MathAid
+   */
+  get scene(): Scene {
+    return this.#gameOver ? 'gameOver' : 'playing';
   }
 
   /**

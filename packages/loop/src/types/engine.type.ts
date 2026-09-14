@@ -15,9 +15,11 @@
  * @author MathAid
  */
 
+import type { IAudioSink } from './audio.type';
+import type { IClock } from './clock.type';
 import type { IEventEmitter } from './event.type';
 import type { IInputSource } from './input.type';
-import type { IFrameClock, IGame, IPerformanceMetrics } from './simulation.type';
+import type { IGame, IPerformanceMetrics, LiveMetrics } from './simulation.type';
 
 /**
  * @summary Static, serialisable configuration for an engine instance.
@@ -40,6 +42,8 @@ export interface IEngineConfig {
   readonly fpsHistory?: number;
   /** Upper bound on simulation catch-up steps run in a single host frame. */
   readonly maxSteps?: number;
+  /** The minimum wall-time between paused-loop GUI ticks, in nanoseconds. */
+  readonly guiInterval?: number;
   /** Request browser fullscreen when the engine runs. */
   readonly fullscreen?: boolean;
   /** Fixed logical resolution in device-independent pixels. */
@@ -75,6 +79,10 @@ export type EngineEvents<R = unknown> = {
   readonly inputDetached: { readonly id: string };
   /** The active render mode changed. */
   readonly rendererChanged: { readonly renderer: R };
+  /** The audio sink changed. */
+  readonly audioChanged: { readonly sink: IAudioSink };
+  /** A per-frame snapshot of live metrics (FPS/alpha/dt/elapsed). */
+  readonly metrics: LiveMetrics;
 };
 
 /**
@@ -109,10 +117,12 @@ export interface IEngine<G extends IGame = IGame, R = unknown> extends IEventEmi
   readonly configuration: IEngineConfig;
   /** The game this engine drives. */
   readonly game: G;
-  /** Read-only timing view (pending steps, step interval). */
-  readonly clock: IFrameClock;
+  /** The time source (monotonic `now()`). */
+  readonly clock: IClock;
   /** Read-only performance metrics. */
   readonly metrics: IPerformanceMetrics;
+  /** A per-frame snapshot of live metrics (FPS/alpha/dt/elapsed). */
+  readonly live: LiveMetrics;
   /** Whether the loop is currently paused. */
   readonly paused: boolean;
   /**
@@ -137,6 +147,12 @@ export interface IEngine<G extends IGame = IGame, R = unknown> extends IEventEmi
    * @author MathAid
    */
   setRenderer(renderer: R): void;
+  /**
+   * @summary Set the active audio sink.
+   * @param sink - The sink game sound requests are forwarded to.
+   * @author MathAid
+   */
+  setAudio(sink: IAudioSink): void;
   /**
    * @summary Start the loop.
    * @return Resolves once the first frame is scheduled (not when the engine stops).
