@@ -1,0 +1,7 @@
+- Create classes for minos, tetrominos, queue, score-board & menu
+- Fix rotate so that rotation can occur at even if there isn't enough space to fit the width of the rotated piece. This can be done by computing the amount by which the rotated piece intersects with the board edge and then subtract the excess from the `cols` attr of the piece
+- Fix queue mino positioning
+- Use sprites for metric bars and minos
+- Add animations to the game
+- Add sound to the game
+- Use the [Tetris Glossary](https://tetris.fandom.com/wiki/Glossary)
