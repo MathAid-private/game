@@ -131,10 +131,11 @@ function loadGame(id: GameId): {
   game: IGame<IFrameBuilder>;
   bindings: Record<string, readonly string[]>;
 } {
+  const seed = Math.floor(Math.random() * 2_000_000);
   switch (id) {
     case 'tetris':
       return {
-        game: new Tetris(1, 30),
+        game: new Tetris(seed, 30),
         bindings: {
           [TETRIS_ACTIONS.moveLeft]: ['ArrowLeft', 'KeyA'],
           [TETRIS_ACTIONS.moveRight]: ['ArrowRight', 'KeyD'],
@@ -146,7 +147,7 @@ function loadGame(id: GameId): {
       };
     case 'snake':
       return {
-        game: new Snake(1, 8),
+        game: new Snake(seed, 8),
         bindings: {
           [SNAKE_ACTIONS.up]: ['ArrowUp', 'KeyW'],
           [SNAKE_ACTIONS.down]: ['ArrowDown', 'KeyS'],
@@ -157,7 +158,7 @@ function loadGame(id: GameId): {
       };
     case 'invaders':
       return {
-        game: new SpaceInvaders(1),
+        game: new SpaceInvaders(seed),
         bindings: {
           [INVADERS_ACTIONS.left]: ['ArrowLeft', 'KeyA'],
           [INVADERS_ACTIONS.right]: ['ArrowRight', 'KeyD'],
