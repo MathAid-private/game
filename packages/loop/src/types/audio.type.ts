@@ -15,16 +15,18 @@
 /**
  * Optiona used at {@linkcode IAudioSink.play}
  */
-export interface IAudioPlayOptions extends Readonly<Pick<
-  AudioBufferSourceNode,
-  | 'loop'
-  | 'loopStart'
-  | 'loopEnd'
-  | 'playbackRate'
-  | 'detune'
-  | 'numberOfInputs'
-  | 'numberOfOutputs'
->> {
+export interface IAudioPlayOptions extends Readonly<
+  Pick<
+    AudioBufferSourceNode,
+    | 'loop'
+    | 'loopStart'
+    | 'loopEnd'
+    | 'playbackRate'
+    | 'detune'
+    | 'numberOfInputs'
+    | 'numberOfOutputs'
+  >
+> {
   /** Audio volume */
   readonly volume?: number;
 }

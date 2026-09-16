@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  Engine,
-  ManualHostLoop,
-  RecordingAudioSink,
-  SecondMetric,
-  type IGame,
-} from '@games/loop';
+import { Engine, ManualHostLoop, RecordingAudioSink, SecondMetric, type IGame } from '@games/loop';
 
 describe('audio', () => {
   it('forwards game sound requests through the engine to the bound sink', () => {
@@ -24,9 +18,7 @@ describe('audio', () => {
     host.clock.advance(SecondMetric.NANOSECONDS / 60);
     host.scheduler.tick(host.clock.now());
 
-    expect(sink.calls).toEqual([
-      { kind: 'play', name: 'explosion', opts: { volume: 0.5 } },
-    ]);
+    expect(sink.calls).toEqual([{ kind: 'play', name: 'explosion', opts: { volume: 0.5 } }]);
     void engine.stop();
   });
 

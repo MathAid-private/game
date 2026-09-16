@@ -29,9 +29,5 @@
   /* --- ESLint Flat Config Support --- */
   "eslint.useFlatConfig": true,
   "eslint.validate": ["javascript", "javascriptreact", "typescript", "typescriptreact"],
-  "cSpell.words": [
-    "tetris",
-    "Tetromino",
-    "tetrominos"
-  ]
+  "cSpell.words": ["tetris", "Tetromino", "tetrominos"]
 }

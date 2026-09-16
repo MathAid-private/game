@@ -560,7 +560,7 @@ export class Tetris implements IStatefulGame<IFrameBuilder> {
    * @summary Computes tetromino ranges
    * @description Helper method for computing the metrics, such as ranges,
    * of a given tetromino, in it's local coordinate space
-   * 
+   *
    * @param {Mino[]} cells The cells of a tetromino, typically retrieved via {@linkcode ActivePiece.cells}
    * @returns {IMinoMetric} the computed metrics
    */

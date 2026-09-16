@@ -42,12 +42,7 @@
  */
 
 import { type ColorValue, convert } from './convert';
-import {
-  type ColorSpaceDef,
-  type ColorSpaceId,
-  Linear_sRGB,
-  sRGB,
-} from './space';
+import { type ColorSpaceDef, type ColorSpaceId, Linear_sRGB, sRGB } from './space';
 
 // -----------------------------------------------------------------
 //  Shared return types
@@ -210,12 +205,7 @@ export interface DX12Config {
  * struct. Supply an `_UNORM_SRGB` back-buffer format and let the driver
  * encode.
  */
-export const DX12: BackendAdapter<
-  DX12ColorSpace,
-  DX12PixelFormat,
-  DX12ClearColor,
-  DX12Config
-> = {
+export const DX12: BackendAdapter<DX12ColorSpace, DX12PixelFormat, DX12ClearColor, DX12Config> = {
   colorSpaceEnum(id): DX12ColorSpace {
     const map: Partial<Record<ColorSpaceId, DX12ColorSpace>> = {
       sRGB: 'DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709',
@@ -326,12 +316,7 @@ export interface VkSurfaceConfig {
  * `Linear_Rec2020` has no native Vulkan mapping. The adapter throws
  * for that ID. Use `PQ_Rec2020` or `HLG_Rec2020` instead.
  */
-export const Vulkan: BackendAdapter<
-  VkColorSpace,
-  VkFormat,
-  VkClearColor,
-  VkSurfaceConfig
-> = {
+export const Vulkan: BackendAdapter<VkColorSpace, VkFormat, VkClearColor, VkSurfaceConfig> = {
   colorSpaceEnum(id): VkColorSpace {
     const map: Partial<Record<ColorSpaceId, VkColorSpace>> = {
       sRGB: 'VK_COLOR_SPACE_SRGB_NONLINEAR_KHR',
@@ -442,12 +427,7 @@ export interface MetalConfig {
  * formats such as `RGBA16Float` and `RGBA32Float`. For
  * `BGRA8Unorm_sRGB` the driver applies the sRGB EOTF internally.
  */
-export const Metal: BackendAdapter<
-  CGColorSpaceName,
-  MTLPixelFormat,
-  MTLClearColor,
-  MetalConfig
-> = {
+export const Metal: BackendAdapter<CGColorSpaceName, MTLPixelFormat, MTLClearColor, MetalConfig> = {
   colorSpaceEnum(id): CGColorSpaceName {
     const map: Partial<Record<ColorSpaceId, CGColorSpaceName>> = {
       sRGB: 'kCGColorSpaceSRGB',
@@ -497,17 +477,10 @@ export const Metal: BackendAdapter<
 
 /** @summary The OpenGL internal-format enum constants this library emits. */
 export type GLInternalFormat =
-  | 'GL_SRGB8_ALPHA8'
-  | 'GL_RGBA8'
-  | 'GL_RGBA16F'
-  | 'GL_RGBA32F'
-  | 'GL_RGB10_A2';
+  'GL_SRGB8_ALPHA8' | 'GL_RGBA8' | 'GL_RGBA16F' | 'GL_RGBA32F' | 'GL_RGB10_A2';
 
 /** @summary The OpenGL color-space hint strings this library emits. */
-export type GLColorSpaceHint =
-  | 'GL_FRAMEBUFFER_SRGB'
-  | 'GL_LINEAR'
-  | 'GL_HDR_METADATA_EXT';
+export type GLColorSpaceHint = 'GL_FRAMEBUFFER_SRGB' | 'GL_LINEAR' | 'GL_HDR_METADATA_EXT';
 
 /**
  * @summary
@@ -558,12 +531,7 @@ export interface GLConfig {
  *
  * @see {@link https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_framebuffer_sRGB.txt} ARB_framebuffer_sRGB
  */
-export const OpenGL: BackendAdapter<
-  GLColorSpaceHint,
-  GLInternalFormat,
-  GLClearColor,
-  GLConfig
-> = {
+export const OpenGL: BackendAdapter<GLColorSpaceHint, GLInternalFormat, GLClearColor, GLConfig> = {
   colorSpaceEnum(id): GLColorSpaceHint {
     const map: Partial<Record<ColorSpaceId, GLColorSpaceHint>> = {
       sRGB: 'GL_FRAMEBUFFER_SRGB',

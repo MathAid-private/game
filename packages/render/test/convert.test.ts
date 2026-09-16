@@ -25,7 +25,7 @@ import {
   OKLab,
   OKLCh,
   sRGB,
-  XYZ_D65
+  XYZ_D65,
 } from '@games/render';
 import { describe, expect, it } from 'vitest';
 

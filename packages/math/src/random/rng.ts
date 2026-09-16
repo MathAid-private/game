@@ -14,7 +14,7 @@
  * @author MathAid
  */
 
-import { ones } from "../bitwise/words";
+import { ones } from '../bitwise/words';
 
 /**
  * @summary PCG — the Permuted Congruential Generator family (by Melissa O'Neill).

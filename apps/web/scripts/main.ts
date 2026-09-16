@@ -231,7 +231,13 @@ renderer.setSprites(new SpriteRegistry());
 
 const { game, bindings } = loadGame(settings.game);
 const host = buildHost(settings.host);
-const simulation = buildDriver(settings.simulator, game, settings.fps, settings.fpsHistory, host.now());
+const simulation = buildDriver(
+  settings.simulator,
+  game,
+  settings.fps,
+  settings.fpsHistory,
+  host.now(),
+);
 
 /**
  * The render glue: describe the frame into a builder, then hand it to the active renderer.
@@ -283,10 +289,13 @@ void engine.run();
 if (settings.host === 'manual') {
   const manual = host as ManualHostLoop;
   const frame = SecondMetric.NANOSECONDS / settings.fps;
-  window.setInterval(() => {
-    manual.clock.advance(frame);
-    manual.scheduler.tick(manual.clock.now());
-  }, Math.round(1000 / settings.fps));
+  window.setInterval(
+    () => {
+      manual.clock.advance(frame);
+      manual.scheduler.tick(manual.clock.now());
+    },
+    Math.round(1000 / settings.fps),
+  );
 }
 
 getBrowserRefreshRate(200).then((rate) => {

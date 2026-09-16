@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  Engine,
-  ManualHostLoop,
-  ReplayHostLoop,
-  SecondMetric,
-  type IGame,
-} from '@games/loop';
+import { Engine, ManualHostLoop, ReplayHostLoop, SecondMetric, type IGame } from '@games/loop';
 
 describe('ManualHostLoop', () => {
   it('steps once per manual tick', () => {

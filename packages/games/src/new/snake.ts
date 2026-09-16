@@ -65,8 +65,14 @@ export const SNAKE_ACTIONS = {
  */
 const SNAKE_PALETTES: readonly (readonly [Color, Color])[] = [
   [HEAD_COLOR, TAIL_COLOR],
-  [{ r: 0.3, g: 0.6, b: 1, a: 1 }, { r: 0.1, g: 0.2, b: 0.5, a: 1 }],
-  [{ r: 1, g: 0.4, b: 0.7, a: 1 }, { r: 0.5, g: 0.1, b: 0.3, a: 1 }],
+  [
+    { r: 0.3, g: 0.6, b: 1, a: 1 },
+    { r: 0.1, g: 0.2, b: 0.5, a: 1 },
+  ],
+  [
+    { r: 1, g: 0.4, b: 0.7, a: 1 },
+    { r: 0.5, g: 0.1, b: 0.3, a: 1 },
+  ],
 ];
 
 /**
@@ -324,7 +330,10 @@ export class Snake implements IStatefulGame<IFrameBuilder> {
     this.#body.forEach((cell, index) => {
       const t = total === 1 ? 0 : index / (total - 1);
       if (this.#sprites) {
-        frame.sprite({ id: index === 0 ? 'snake-head' : 'snake-body' }, this.#spriteTransform(cell));
+        frame.sprite(
+          { id: index === 0 ? 'snake-head' : 'snake-body' },
+          this.#spriteTransform(cell),
+        );
         return;
       }
       frame.rect(this.#cellRect(cell.col, cell.row), lerpColor(head, tail, t));
@@ -352,7 +361,8 @@ export class Snake implements IStatefulGame<IFrameBuilder> {
   #menuStep(input: IInputState): StepSignal {
     const length = this.#menuItems().length;
     if (input.wasPressed(SNAKE_ACTIONS.down)) this.#menuIndex = (this.#menuIndex + 1) % length;
-    if (input.wasPressed(SNAKE_ACTIONS.up)) this.#menuIndex = (this.#menuIndex - 1 + length) % length;
+    if (input.wasPressed(SNAKE_ACTIONS.up))
+      this.#menuIndex = (this.#menuIndex - 1 + length) % length;
     if (input.wasPressed(SNAKE_ACTIONS.left)) this.#cycleSetting(-1);
     if (input.wasPressed(SNAKE_ACTIONS.right)) this.#cycleSetting(1);
     return 'continue';
@@ -388,7 +398,8 @@ export class Snake implements IStatefulGame<IFrameBuilder> {
         this.#sprites = !this.#sprites;
         break;
       case 2:
-        this.#snakePalette = (this.#snakePalette + dir + SNAKE_PALETTES.length) % SNAKE_PALETTES.length;
+        this.#snakePalette =
+          (this.#snakePalette + dir + SNAKE_PALETTES.length) % SNAKE_PALETTES.length;
         break;
       case 3:
         this.#foodPalette = (this.#foodPalette + dir + FOOD_PALETTES.length) % FOOD_PALETTES.length;

@@ -47,14 +47,7 @@
  * @author MathAid
  */
 
-import {
-  type ColorSpaceDef,
-  type Mat3,
-  OKLab,
-  OKLCh,
-  sRGB,
-  XYZ_D65,
-} from './space';
+import { type ColorSpaceDef, type Mat3, OKLab, OKLCh, sRGB, XYZ_D65 } from './space';
 
 // -----------------------------------------------------------------
 //  Core type
@@ -233,30 +226,27 @@ function mulMat3(m: Mat3, x: number, y: number, z: number): [number, number, num
 
 /** @summary XYZ D65 to LMS, scaled for OKLab. */
 const M_XYZ_to_LMS: Mat3 = [
-  0.8189330101,  0.3618667424, -0.1288597137,
-  0.0329845436,  0.9293118715,  0.0361456387,
-  0.0482003018,  0.2643662691,  0.633851707,
+  0.8189330101, 0.3618667424, -0.1288597137, 0.0329845436, 0.9293118715, 0.0361456387, 0.0482003018,
+  0.2643662691, 0.633851707,
 ];
 
 /** @summary Cube-root LMS to OKLab. */
 const M_LMS_to_Lab: Mat3 = [
-  0.2104542553,  0.793617785,  -0.0040720468,
-  1.9779984951, -2.428592205,   0.4505937099,
-  0.0259040371,  0.7827717662, -0.808675766,
+  0.2104542553, 0.793617785, -0.0040720468, 1.9779984951, -2.428592205, 0.4505937099, 0.0259040371,
+  0.7827717662, -0.808675766,
 ];
 
 /** @summary The inverse of `M_LMS_to_Lab`. OKLab to cube-root LMS. */
 const M_Lab_to_LMS: Mat3 = [
-  1.0,  0.3963377774,  0.2158037573,
-  1.0, -0.1055613458, -0.0638541728,
-  1.0, -0.0894841775, -1.291485548,
+  1.0, 0.3963377774, 0.2158037573, 1.0, -0.1055613458, -0.0638541728, 1.0, -0.0894841775,
+  -1.291485548,
 ];
 
 /** @summary The inverse of `M_XYZ_to_LMS`. Cube-root LMS to XYZ D65. */
 const M_LMS_to_XYZ: Mat3 = [
-   1.2270138511035211, -0.5577999806518222,  0.2812561489664678,
-  -0.0405801784232806, 1.1122568696168302, -0.0716766786656012,
-  -0.0763812845057069, -0.4214819784180127, 1.5861632204407947,
+  1.2270138511035211, -0.5577999806518222, 0.2812561489664678, -0.0405801784232806,
+  1.1122568696168302, -0.0716766786656012, -0.0763812845057069, -0.4214819784180127,
+  1.5861632204407947,
 ];
 
 // -----------------------------------------------------------------
@@ -405,10 +395,10 @@ function fromXYZ(
  * // A no-op conversion returns the same object.
  * const same = convert(make(sRGB, 0.5, 0.2, 0.8), sRGB);
  */
-export function convert<
-  Src extends ColorSpaceDef<string>,
-  Dst extends ColorSpaceDef<string>,
->(color: ColorValue<Src>, dst: Dst): ColorValue<Dst> {
+export function convert<Src extends ColorSpaceDef<string>, Dst extends ColorSpaceDef<string>>(
+  color: ColorValue<Src>,
+  dst: Dst,
+): ColorValue<Dst> {
   const src = color._space;
 
   // Optimise no-op conversions.
@@ -439,9 +429,7 @@ export function convert<
  * const c = make(sRGB, 1.5, -0.2, 0.5);
  * clampToRange(c); // { r: 1, g: 0, b: 0.5, a: 1 }
  */
-export function clampToRange<S extends ColorSpaceDef<string>>(
-  color: ColorValue<S>,
-): ColorValue<S> {
+export function clampToRange<S extends ColorSpaceDef<string>>(color: ColorValue<S>): ColorValue<S> {
   const [rr, rg, rb] = color._space.descriptor.channelRanges;
   const cr = Math.max(rr.min, Math.min(rr.max, color.r));
   const cg = Math.max(rg.min, Math.min(rg.max, color.g));
@@ -468,9 +456,7 @@ export function clampToRange<S extends ColorSpaceDef<string>>(
  * isInRange(make(sRGB, 0.5, 0.5, 0.5));  // true
  * isInRange(make(sRGB, 1.5, 0.5, 0.5));  // false
  */
-export function isInRange<S extends ColorSpaceDef<string>>(
-  color: ColorValue<S>,
-): boolean {
+export function isInRange<S extends ColorSpaceDef<string>>(color: ColorValue<S>): boolean {
   const [rr, rg, rb] = color._space.descriptor.channelRanges;
   const eps = 1e-4;
   return (
@@ -500,9 +486,7 @@ export function isInRange<S extends ColorSpaceDef<string>>(
  * isInSRGBGamut(make(Display_P3, 0.0, 0.9, 0.5)); // false
  * isInSRGBGamut(make(sRGB, 0.5, 0.5, 0.5));       // true
  */
-export function isInSRGBGamut<S extends ColorSpaceDef<string>>(
-  color: ColorValue<S>,
-): boolean {
+export function isInSRGBGamut<S extends ColorSpaceDef<string>>(color: ColorValue<S>): boolean {
   const c = convert(color, sRGB);
   return isInRange(c);
 }
@@ -569,21 +553,10 @@ export function mix<
   Sa extends ColorSpaceDef<string>,
   Sb extends ColorSpaceDef<string>,
   W extends ColorSpaceDef<string> = typeof OKLab,
->(
-  a: ColorValue<Sa>,
-  b: ColorValue<Sb>,
-  t: number,
-  workingSpace?: W,
-): ColorValue<W> {
+>(a: ColorValue<Sa>, b: ColorValue<Sb>, t: number, workingSpace?: W): ColorValue<W> {
   const ws = (workingSpace ?? OKLab) as unknown as W;
   const ca = convert(a, ws);
   const cb = convert(b, ws);
   const lerp = (x: number, y: number) => x + (y - x) * t;
-  return make(
-    ws,
-    lerp(ca.r, cb.r),
-    lerp(ca.g, cb.g),
-    lerp(ca.b, cb.b),
-    lerp(ca.a, cb.a),
-  );
+  return make(ws, lerp(ca.r, cb.r), lerp(ca.g, cb.g), lerp(ca.b, cb.b), lerp(ca.a, cb.a));
 }

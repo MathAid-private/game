@@ -108,13 +108,8 @@ const DELTA_E_EPSILON = 0.02;
  * deltaEOKLab(make(OKLab, 0.5, 0.0, 0.0), make(OKLab, 0.5, 0.1, 0.0));
  * // 0.1
  */
-function deltaEOKLab(
-  a: ColorValue<typeof OKLab>,
-  b: ColorValue<typeof OKLab>,
-): number {
-  return Math.sqrt(
-    (a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2,
-  );
+function deltaEOKLab(a: ColorValue<typeof OKLab>, b: ColorValue<typeof OKLab>): number {
+  return Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2);
 }
 
 // -----------------------------------------------------------------
@@ -142,10 +137,10 @@ function deltaEOKLab(
  * r.inGamut;      // false
  * r.converted;    // ColorValue<typeof sRGB>
  */
-export function checkGamut<
-  S extends ColorSpaceDef<string>,
-  T extends ColorSpaceDef<string>,
->(color: ColorValue<S>, targetSpace: T): GamutCheckResult {
+export function checkGamut<S extends ColorSpaceDef<string>, T extends ColorSpaceDef<string>>(
+  color: ColorValue<S>,
+  targetSpace: T,
+): GamutCheckResult {
   const converted = convert(color, targetSpace);
   return {
     inGamut: isInRange(converted),
@@ -180,10 +175,7 @@ export function checkGamut<
  * // Fast clamp, hue-shifting.
  * const fast = mapToGamut(p3Color, sRGB, 'clamp');
  */
-export function mapToGamut<
-  S extends ColorSpaceDef<string>,
-  T extends ColorSpaceDef<string>,
->(
+export function mapToGamut<S extends ColorSpaceDef<string>, T extends ColorSpaceDef<string>>(
   color: ColorValue<S>,
   targetSpace: T,
   method: GamutMappingMethod = 'css-chroma',
@@ -251,15 +243,15 @@ function clampGamut<T extends ColorSpaceDef<string>>(
  *
  * @see {@link https://www.w3.org/TR/css-color-4/#css-gamut-mapping} CSS Color 4
  */
-function cssChromaBisect<
-  S extends ColorSpaceDef<string>,
-  T extends ColorSpaceDef<string>,
->(color: ColorValue<S>, targetSpace: T): ColorValue<T> {
+function cssChromaBisect<S extends ColorSpaceDef<string>, T extends ColorSpaceDef<string>>(
+  color: ColorValue<S>,
+  targetSpace: T,
+): ColorValue<T> {
   const lch = convert(color, OKLCh);
   const L = lch.r;
   const H = lch.b;
 
-   // White and black poles. Return the exact white and black in the
+  // White and black poles. Return the exact white and black in the
   // target space, then clamp to remove matrix rounding error.
   if (L >= 1) {
     const white = convert(make(OKLab, 1, 0, 0), targetSpace);

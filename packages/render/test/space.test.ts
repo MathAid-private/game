@@ -14,22 +14,22 @@
  */
 
 import {
-    _brand,
-    ACES_AP0,
-    ACES_AP1,
-    type ColorSpaceDef,
-    Display_P3,
-    HLG_Rec2020,
-    Linear_P3,
-    Linear_Rec2020,
-    Linear_sRGB,
-    makeSpace,
-    OKLab,
-    OKLCh,
-    PQ_Rec2020,
-    type SpaceDescriptor,
-    sRGB,
-    XYZ_D65,
+  _brand,
+  ACES_AP0,
+  ACES_AP1,
+  type ColorSpaceDef,
+  Display_P3,
+  HLG_Rec2020,
+  Linear_P3,
+  Linear_Rec2020,
+  Linear_sRGB,
+  makeSpace,
+  OKLab,
+  OKLCh,
+  PQ_Rec2020,
+  type SpaceDescriptor,
+  sRGB,
+  XYZ_D65,
 } from '@games/render';
 import { describe, expect, it } from 'vitest';
 
