@@ -99,6 +99,20 @@ These are things almost every game needs. They are missing today.
 - **Where.** Extend `src/color/convert.ts`.
 - **Cost.** Small.
 
+### 1.7 Mutable color type
+
+- What. Add a `MutableColor<S>` type. It inherits from `ColorValue<S>` but drops the readonly modifiers on `r`, `g`, `b`, `a`. Add `toMutable(color)` and `toImmutable(color)` converters.
+- Why. Hot loops in particle systems and per-frame tint updates allocate a new `ColorValue` on every edit. A mutable variant removes that allocation. The immutable variant stays the default so accidental aliasing stays rare.
+- Where. A new file `src/color/mutable.ts`.
+- Cost. Small.
+
+### 1.8 Vulkan mapping for `Linear_Rec2020`
+
+- What. Add a `VkColorSpace` value for `Linear_Rec2020`. Use `VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT` is wrong. Vulkan has no native `BT.2020` linear enum. Fall back to `VK_COLOR_SPACE_HDR10_ST2084_EXT` is also wrong. The correct fallback is `VK_COLOR_SPACE_PASS_THROUGH_EXT` plus a shader-side note.
+- Why. Callers should not have to catch an exception for a common HDR space.
+- Where. Extend `src/color/backend.ts`.
+- Cost. Small.
+
 ---
 
 ## Tier 2. Common needs
@@ -115,6 +129,17 @@ These appear in most medium and large projects.
   every team from writing their own parser.
 - **Where.** A new file `src/color/css.ts`.
 - **Cost.** Medium. The CSS Color 4 grammar is large.
+
+### 2.2 Gradient and raster types
+
+- What. Add four gradient kinds and one raster kind.
+  - `LinearGradient` with two points.
+  - `RadialGradient` with a center and two radii.
+  - `MultiStopGradient` with an arbitrary stop list.
+  - `PatternRaster` with an image plus tile and transform modes.
+- Why. Games need all four. Health bars use linear. Light glows use radial. Sky boxes use multi-stop. UI backdrops use patterns.
+· Where. A new directory `src/color/gradient/` with one file per kind plus an `index.ts`.
+- Cost. Medium to large.
 
 ### 2.2 Gradient interpolation
 
@@ -323,6 +348,17 @@ packages or in the consumer.
 5. **Should `Linear_Rec2020` gain a Vulkan mapping?**
    No native enum exists. A shader-side hint is possible. Decide if
    that is a lie or a helpful default.
+
+## Resolved decisions
+
+| Question | Decision | Date |
+|----------|----------|------|
+| Mutation via `with()` | Add a separate `MutableColor<S>` type. See Tier 1.7. | Resolved |
+| `Result` vs throw | Always throw. No `Result` return type. | Resolved |
+| Backend warn vs throw | Always throw. | Resolved |
+| Own gradient type | Yes. Linear, radial, multi, pattern. See Tier 2.2. | Resolved |
+| `Linear_Rec2020` Vulkan | Add a mapping. See Tier 1.8. | Resolved |
+
 
 ---
 
