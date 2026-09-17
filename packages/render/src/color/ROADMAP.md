@@ -23,6 +23,14 @@ Each entry has four lines.
 Priority tiers are rough guides. Tier 1 entries block common work.
 Tier 4 entries are nice but optional.
 
+## Patch
+Question Decision Action
+1. Mutation helper Yes, via a separate MutableColor type. It inherits from ColorValue. Added as Tier 1.7 and to Milestone 1.
+2. Result vs throw Always throw. No change. convert and fromHex keep throwing.
+3. Backend warn vs throw Throw is fine. No change.
+4. Gradient type Yes. Linear, radial, multi-stop, and pattern rasters. Expanded Tier 2.2 into four sub-items.
+5. Linear_Rec2020 Vulkan mapping Add it. Added as Tier 1.8 and to Milestone 1.
+
 ---
 
 ## Tier 1. Foundational gaps
