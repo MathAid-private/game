@@ -560,3 +560,62 @@ export function mix<
   const lerp = (x: number, y: number) => x + (y - x) * t;
   return make(ws, lerp(ca.r, cb.r), lerp(ca.g, cb.g), lerp(ca.b, cb.b), lerp(ca.a, cb.a));
 }
+/**
+ * @summary
+ * Set one channel of a color value and return a new value.
+ *
+ * @description
+ * The function copies the input. It writes the new channel value. The
+ * space tag is preserved. The input object is not changed.
+ *
+ * Use the three string literals `'r'`, `'g'`, and `'b'` as the channel
+ * name. The `a` channel has its own helper, `withAlpha`.
+ *
+ * @template S - The color space type.
+ * @template C - The channel name. One of `'r'`, `'g'`, or `'b'`.
+ *
+ * @param color - The source color.
+ * @param channel - The channel to replace.
+ * @param value - The new channel value.
+ * @returns A new `ColorValue<S>` with the changed channel.
+ *
+ * @example
+ * const red = make(sRGB, 1, 0, 0);
+ * const dark = withChannel(red, 'r', 0.5);
+ * // dark.r === 0.5 and red.r === 1
+ */
+export function withChannel<S extends ColorSpaceDef<string>, C extends 'r' | 'g' | 'b'>(
+  color: ColorValue<S>,
+  channel: C,
+  value: number,
+): ColorValue<S> {
+  if (channel === 'r') return make(color._space, value, color.g, color.b, color.a);
+  if (channel === 'g') return make(color._space, color.r, value, color.b, color.a);
+  return make(color._space, color.r, color.g, value, color.a);
+}
+
+/**
+ * @summary
+ * Set the alpha channel of a color value and return a new value.
+ *
+ * @description
+ * The function copies the input. It writes the new alpha value. The
+ * three color channels are unchanged. The space tag is preserved.
+ *
+ * @template S - The color space type.
+ *
+ * @param color - The source color.
+ * @param a - The new alpha value. The caller should supply 0 to 1.
+ * @returns A new `ColorValue<S>` with the changed alpha.
+ *
+ * @example
+ * const red = make(sRGB, 1, 0, 0);
+ * const faint = withAlpha(red, 0.5);
+ * // faint.a === 0.5 and red.a === 1
+ */
+export function withAlpha<S extends ColorSpaceDef<string>>(
+  color: ColorValue<S>,
+  a: number,
+): ColorValue<S> {
+  return make(color._space, color.r, color.g, color.b, a);
+}

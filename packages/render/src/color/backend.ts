@@ -313,8 +313,13 @@ export interface VkSurfaceConfig {
  * formats. The driver does not apply the EOTF. Configure the render
  * pass with the correct `VkSurfaceFormatKHR.colorSpace`.
  *
- * `Linear_Rec2020` has no native Vulkan mapping. The adapter throws
- * for that ID. Use `PQ_Rec2020` or `HLG_Rec2020` instead.
+ * `Linear_Rec2020` maps to `VK_COLOR_SPACE_PASS_THROUGH_EXT`. Vulkan
+ * has no native linear BT.2020 enum. Pass-through tells the driver to
+ * send the values as-is. The render pass and the shader must agree on
+ * the interpretation. Document the shader expectation in your renderer.
+ *
+ * @note `VK_COLOR_SPACE_PASS_THROUGH_EXT` requires the
+ * `VK_EXT_swapchain_colorspace` extension.
  */
 export const Vulkan: BackendAdapter<VkColorSpace, VkFormat, VkClearColor, VkSurfaceConfig> = {
   colorSpaceEnum(id): VkColorSpace {
@@ -323,6 +328,7 @@ export const Vulkan: BackendAdapter<VkColorSpace, VkFormat, VkClearColor, VkSurf
       Linear_sRGB: 'VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT',
       Display_P3: 'VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT',
       Linear_P3: 'VK_COLOR_SPACE_DISPLAY_P3_LINEAR_EXT',
+      Linear_Rec2020: 'VK_COLOR_SPACE_PASS_THROUGH_EXT',
       PQ_Rec2020: 'VK_COLOR_SPACE_HDR10_ST2084_EXT',
       HLG_Rec2020: 'VK_COLOR_SPACE_HDR10_HLG_EXT',
       XYZ_D65: 'VK_COLOR_SPACE_PASS_THROUGH_EXT',
