@@ -682,12 +682,27 @@ const M_LMS_to_XYZ_ICtCp: Mat3 = [
   1.1879959417328034,
 ];
 
-/** ICtCp LMS to ICtCp matrix. */
-const M_LMS_to_ICtCp: Mat3 = [2048, 2048, 0, 6610, -13613, 7003, 17933, -17390, -543];
+/**
+ * @summary
+ * LMS prime to ICtCp. The PQ-encoded LMS values are scaled and
+ * combined. The `1/4096` factor matches the Dolby white paper.
+ *
+ * @see {@link https://professional.dolby.com/siteassets/pdfs/ictcp_dolbywhitepaper_v071.pdf} Dolby ICtCp
+ */
+const M_LMS_to_ICtCp: Mat3 = [
+  0.5, 0.5, 0, 1.61376953125, -3.323486328125, 1.709716796875, 4.377685546875, -4.24560546875,
+  -0.132568359375,
+];
 
-/** ICtCp to LMS matrix. The inverse of `M_LMS_to_ICtCp`. */
+/**
+ * @summary
+ * ICtCp to LMS prime. The inverse of `M_LMS_to_ICtCp`.
+ *
+ * @see {@link https://professional.dolby.com/siteassets/pdfs/ictcp_dolbywhitepaper_v071.pdf} Dolby ICtCp
+ */
 const M_ICtCp_to_LMS: Mat3 = [
-  0.000488, 0.000488, 0.000488, 0.000173, -0.000237, -0.000014, 0.000213, -0.00016, -0.000015,
+  1.0, 0.00860903703793282, 0.1110296250030259, 1.0, -0.00860903703793282, -0.1110296250030259, 1.0,
+  0.5600313328259677, -0.3206271749873191,
 ];
 
 // -----------------------------------------------------------------

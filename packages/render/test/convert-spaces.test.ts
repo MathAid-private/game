@@ -37,7 +37,7 @@ describe('HSL', () => {
 
   it('a zero-saturation color has no hue', () => {
     const c = convert(make(sRGB, 0.5, 0.5, 0.5), HSL);
-    expect(c.g).toBe(0);
+    expect(c.g).toBeCloseTo(0, 5);
   });
 });
 

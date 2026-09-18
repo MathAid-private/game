@@ -27,7 +27,11 @@ import { describe, expect, it } from 'vitest';
 describe('toFloat32Array', () => {
   it('packs four floats per color in RGBA order', () => {
     const data = toFloat32Array([make(sRGB, 0.1, 0.2, 0.3, 0.4)]);
-    expect(Array.from(data)).toEqual([0.1, 0.2, 0.3, 0.4]);
+    expect(data.length).toBe(4);
+    expect(data[0]).toBeCloseTo(0.1, 6);
+    expect(data[1]).toBeCloseTo(0.2, 6);
+    expect(data[2]).toBeCloseTo(0.3, 6);
+    expect(data[3]).toBeCloseTo(0.4, 6);
   });
 
   it('handles an empty input', () => {

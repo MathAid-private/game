@@ -221,9 +221,13 @@ function parseRgb(args: string): ColorValue<typeof sRGB> {
   if (parts.length !== 3) {
     throw new Error(`fromCSS: rgb needs 3 values, got ${parts.length}.`);
   }
-  const r = numOrPct(parts[0]!, 255) / (parts[0]!.endsWith('%') ? 1 : 255);
-  const g = numOrPct(parts[1]!, 255) / (parts[1]!.endsWith('%') ? 1 : 255);
-  const b = numOrPct(parts[2]!, 255) / (parts[2]!.endsWith('%') ? 1 : 255);
+  const channel = (s: string): number => {
+    if (s.endsWith('%')) return numOrPct(s, 1);
+    return numOrPct(s, 1) / 255;
+  };
+  const r = channel(parts[0]!);
+  const g = channel(parts[1]!);
+  const b = channel(parts[2]!);
   const a = alpha === undefined ? 1 : numOrPct(alpha, 1);
   return make(sRGB, r, g, b, a);
 }

@@ -94,29 +94,16 @@ export interface DitherOptions {
  * Normalized to the 0 to 1 range by dividing by `size * size`. The
  * constants below store the raw integer thresholds.
  */
-const BAYER_2: readonly number[] = [
-  0, 2,
-  3, 1,
-];
+const BAYER_2: readonly number[] = [0, 2, 3, 1];
 
 /** @summary The 4x4 Bayer threshold matrix. */
-const BAYER_4: readonly number[] = [
-   0,  8,  2, 10,
-  12,  4, 14,  6,
-   3, 11,  1,  9,
-  15,  7, 13,  5,
-];
+const BAYER_4: readonly number[] = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 
 /** @summary The 8x8 Bayer threshold matrix. */
 const BAYER_8: readonly number[] = [
-   0, 32,  8, 40,  2, 34, 10, 42,
-  48, 16, 56, 24, 50, 18, 58, 26,
-  12, 44,  4, 36, 14, 46,  6, 38,
-  60, 28, 52, 20, 62, 30, 54, 22,
-   3, 35, 11, 43,  1, 33,  9, 41,
-  51, 19, 59, 27, 49, 17, 57, 25,
-  15, 47,  7, 39, 13, 45,  5, 37,
-  63, 31, 55, 23, 61, 29, 53, 21,
+  0, 32, 8, 40, 2, 34, 10, 42, 48, 16, 56, 24, 50, 18, 58, 26, 12, 44, 4, 36, 14, 46, 6, 38, 60, 28,
+  52, 20, 62, 30, 54, 22, 3, 35, 11, 43, 1, 33, 9, 41, 51, 19, 59, 27, 49, 17, 57, 25, 15, 47, 7,
+  39, 13, 45, 5, 37, 63, 31, 55, 23, 61, 29, 53, 21,
 ];
 
 function bayerMatrix(size: 2 | 4 | 8): readonly number[] {
@@ -250,9 +237,7 @@ export function dither<S extends ColorSpaceDef<string>>(
   options: DitherOptions,
 ): ReadonlyArray<ColorValue<typeof sRGB>> {
   if (colors.length !== width * height) {
-    throw new Error(
-      `dither: colors.length ${colors.length} does not match ${width} * ${height}.`,
-    );
+    throw new Error(`dither: colors.length ${colors.length} does not match ${width} * ${height}.`);
   }
 
   const srgbColors = colors.map((c) => convert(c, sRGB));
@@ -274,19 +259,19 @@ export function dither<S extends ColorSpaceDef<string>>(
         // Spread the threshold across one LSB of the 8-bit target.
         const step = 1 / 255;
         const offset = (threshold - 0.5) * step;
-        out[i] = quantize(
-          make(sRGB, c.r + offset, c.g + offset, c.b + offset, c.a),
-          'rgb565',
-        );
+        out[i] = quantize(make(sRGB, c.r + offset, c.g + offset, c.b + offset, c.a), 'rgb565');
       }
     }
     return out;
   }
 
   // Floyd-Steinberg.
-  const work: { r: number; g: number; b: number; a: number }[] = srgbColors.map(
-    (c) => ({ r: c.r, g: c.g, b: c.b, a: c.a }),
-  );
+  const work: { r: number; g: number; b: number; a: number }[] = srgbColors.map((c) => ({
+    r: c.r,
+    g: c.g,
+    b: c.b,
+    a: c.a,
+  }));
   const out: ColorValue<typeof sRGB>[] = new Array(colors.length);
   const R_MAX = 31;
   const G_MAX = 63;

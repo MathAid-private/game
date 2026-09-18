@@ -77,8 +77,8 @@ describe('Vulkan adapter', () => {
     expect(Vulkan.colorSpaceEnum('Linear_Rec2020')).toBe('VK_COLOR_SPACE_PASS_THROUGH_EXT');
   });
 
-  it('throws for Linear_Rec2020 since it has no native mapping', () => {
-    expect(() => Vulkan.colorSpaceEnum('Linear_Rec2020')).toThrow(/Vulkan/);
+  it('maps Linear_Rec2020 to pass-through', () => {
+    expect(Vulkan.colorSpaceEnum('Linear_Rec2020')).toBe('VK_COLOR_SPACE_PASS_THROUGH_EXT');
   });
 
   it('clearColor emits a float32 tuple', () => {

@@ -219,17 +219,17 @@ describe('samplePattern', () => {
   it('wraps on x only with repeat-x', () => {
     const r: PatternRaster<typeof sRGB> = { ...base, tile: 'repeat-x' };
     const c1 = samplePattern(r, { x: 3, y: 0 });
-    expect(c1.r).toBe(1);
+    expect(c1.g).toBe(1); // green, not red
     const c2 = samplePattern(r, { x: 0, y: 2 });
-    expect(c2.a).toBe(0);
+    expect(c2.a).toBe(0); // outside the y range, so transparent
   });
 
   it('wraps on y only with repeat-y', () => {
     const r: PatternRaster<typeof sRGB> = { ...base, tile: 'repeat-y' };
     const c1 = samplePattern(r, { x: 0, y: 3 });
-    expect(c1.r).toBe(1);
+    expect(c1.b).toBe(1); // blue, not red
     const c2 = samplePattern(r, { x: 3, y: 0 });
-    expect(c2.a).toBe(0);
+    expect(c2.a).toBe(0); // outside the x range, so transparent
   });
 
   it('returns transparent outside with no-repeat', () => {

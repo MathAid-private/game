@@ -78,9 +78,9 @@ const WHITE_POINTS: Record<WhitePoint, readonly [number, number, number]> = {
   D55: [0.95682, 1.0, 0.92149],
   D65: [0.95047, 1.0, 1.08883],
   D93: [0.91947, 1.0, 1.26897],
-  E:   [1.0,     1.0, 1.0],
-  A:   [1.09850, 1.0, 0.35585],
-  C:   [0.98074, 1.0, 1.18232],
+  E: [1.0, 1.0, 1.0],
+  A: [1.0985, 1.0, 0.35585],
+  C: [0.98074, 1.0, 1.18232],
 };
 
 /**
@@ -92,52 +92,33 @@ const WHITE_POINTS: Record<WhitePoint, readonly [number, number, number]> = {
  * by ICC and by most color management tools.
  */
 const M_BRADFORD: Mat3 = [
-   0.8951,  0.2664, -0.1614,
-  -0.7502,  1.7135,  0.0367,
-   0.0389, -0.0685,  1.0296,
+  0.8951, 0.2664, -0.1614, -0.7502, 1.7135, 0.0367, 0.0389, -0.0685, 1.0296,
 ];
 
 /** @summary The inverse of `M_BRADFORD`. */
 const M_BRADFORD_INV: Mat3 = [
-   0.9869929, -0.1470543,  0.1599627,
-   0.4323053,  0.5183603,  0.0492912,
-  -0.0085287,  0.0400428,  0.9684867,
+  0.9869929, -0.1470543, 0.1599627, 0.4323053, 0.5183603, 0.0492912, -0.0085287, 0.0400428,
+  0.9684867,
 ];
 
 /** @summary The Von Kries cone response matrix. */
-const M_VON_KRIES: Mat3 = [
-  0.40024, 0.70760, -0.08081,
- -0.22630, 1.16532,  0.04570,
-  0.0,     0.0,      0.91822,
-];
+const M_VON_KRIES: Mat3 = [0.40024, 0.7076, -0.08081, -0.2263, 1.16532, 0.0457, 0.0, 0.0, 0.91822];
 
 /** @summary The inverse of `M_VON_KRIES`. */
 const M_VON_KRIES_INV: Mat3 = [
-  1.8599364, -1.1293816,  0.2198974,
-  0.3611914,  0.6388125, -0.0000064,
-  0.0,        0.0,        1.0890636,
+  1.8599364, -1.1293816, 0.2198974, 0.3611914, 0.6388125, -0.0000064, 0.0, 0.0, 1.0890636,
 ];
 
 /** @summary The CAT02 cone response matrix from CIECAM02. */
-const M_CAT02: Mat3 = [
-   0.7328,  0.4296, -0.1624,
-  -0.7036,  1.6975,  0.0061,
-   0.0030,  0.0136,  0.9834,
-];
+const M_CAT02: Mat3 = [0.7328, 0.4296, -0.1624, -0.7036, 1.6975, 0.0061, 0.003, 0.0136, 0.9834];
 
 /** @summary The inverse of `M_CAT02`. */
 const M_CAT02_INV: Mat3 = [
-   1.0961238, -0.2788690,  0.1827452,
-   0.4543690,  0.4735332,  0.0720978,
-  -0.0096276, -0.0056980,  1.0153256,
+  1.0961238, -0.278869, 0.1827452, 0.454369, 0.4735332, 0.0720978, -0.0096276, -0.005698, 1.0153256,
 ];
 
 /** @summary The identity matrix. Used by `xyz-scaling`. */
-const M_IDENTITY: Mat3 = [
-  1, 0, 0,
-  0, 1, 0,
-  0, 0, 1,
-];
+const M_IDENTITY: Mat3 = [1, 0, 0, 0, 1, 0, 0, 0, 1];
 
 // -----------------------------------------------------------------
 //  Internals
@@ -208,9 +189,15 @@ export function adapt<S extends ColorSpaceDef<string>>(
   const dstCone = mulMat3(m, dstWhite[0], dstWhite[1], dstWhite[2]);
 
   const scale: Mat3 = [
-    dstCone[0] / srcCone[0], 0, 0,
-    0, dstCone[1] / srcCone[1], 0,
-    0, 0, dstCone[2] / srcCone[2],
+    dstCone[0] / srcCone[0],
+    0,
+    0,
+    0,
+    dstCone[1] / srcCone[1],
+    0,
+    0,
+    0,
+    dstCone[2] / srcCone[2],
   ];
 
   const xyz = convert(color, XYZ_D65);

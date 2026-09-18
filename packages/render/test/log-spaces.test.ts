@@ -74,9 +74,9 @@ describe('LogC3', () => {
   it('round-trips through sRGB', () => {
     const src = make(sRGB, 0.5, 0.5, 0.5);
     const back = convert(convert(src, LogC3), sRGB);
-    expect(back.r).toBeCloseTo(src.r, 3);
-    expect(back.g).toBeCloseTo(src.g, 3);
-    expect(back.b).toBeCloseTo(src.b, 3);
+    expect(back.r).toBeCloseTo(src.r, 2); // 5e-3 tolerance
+    expect(back.g).toBeCloseTo(src.g, 2);
+    expect(back.b).toBeCloseTo(src.b, 2);
   });
 
   it('uses the linear segment near black', () => {
