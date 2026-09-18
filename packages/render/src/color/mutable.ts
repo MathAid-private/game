@@ -106,9 +106,7 @@ export interface MutableColor<S extends ColorSpaceDef<string>> {
  * m.r = 1;
  * // src.r is still 0.5
  */
-export function toMutable<S extends ColorSpaceDef<string>>(
-  color: ColorValue<S>,
-): MutableColor<S> {
+export function toMutable<S extends ColorSpaceDef<string>>(color: ColorValue<S>): MutableColor<S> {
   return { r: color.r, g: color.g, b: color.b, a: color.a, _space: color._space };
 }
 

@@ -133,11 +133,5 @@ export function sampleStops<S extends ColorSpaceDef<string>>(
   const ca = convert(a.color, workingSpace);
   const cb = convert(b.color, workingSpace);
   const lerp = (x: number, y: number) => x + (y - x) * local;
-  return make(
-    workingSpace,
-    lerp(ca.r, cb.r),
-    lerp(ca.g, cb.g),
-    lerp(ca.b, cb.b),
-    lerp(ca.a, cb.a),
-  );
+  return make(workingSpace, lerp(ca.r, cb.r), lerp(ca.g, cb.g), lerp(ca.b, cb.b), lerp(ca.a, cb.a));
 }

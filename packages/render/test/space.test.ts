@@ -17,9 +17,12 @@ import {
   _brand,
   ACES_AP0,
   ACES_AP1,
+  CIE_Lab,
   type ColorSpaceDef,
   Display_P3,
   HLG_Rec2020,
+  HSL,
+  ICtCp,
   Linear_P3,
   Linear_Rec2020,
   Linear_sRGB,
@@ -83,6 +86,21 @@ describe('makeSpace', () => {
     };
     expect(MySpace.id).toBe('MySpace');
     expect((MySpace as Record<symbol, unknown>)[_brand]).toBe('MySpace');
+  });
+});
+
+describe('new spaces', () => {
+  it('HSL has three channels with L in 0 to 1', () => {
+    expect(HSL.descriptor.channelNames).toEqual(['H', 'S', 'L']);
+    expect(HSL.descriptor.channelRanges[2].max).toBe(1);
+  });
+
+  it('CIE_Lab L runs 0 to 100', () => {
+    expect(CIE_Lab.descriptor.channelRanges[0]).toEqual({ min: 0, max: 100 });
+  });
+
+  it('ICtCp has the expected channel names', () => {
+    expect(ICtCp.descriptor.channelNames).toEqual(['I', 'Ct', 'Cp']);
   });
 });
 

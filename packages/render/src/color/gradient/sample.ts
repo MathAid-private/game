@@ -32,10 +32,7 @@ import { type Point2D } from './types';
  * @template S - The color space of the stop colors or pixels.
  */
 export type AnyGradient<S extends ColorSpaceDef<string>> =
-  | LinearGradient<S>
-  | RadialGradient<S>
-  | MultiStopGradient<S>
-  | PatternRaster<S>;
+  LinearGradient<S> | RadialGradient<S> | MultiStopGradient<S> | PatternRaster<S>;
 
 // -----------------------------------------------------------------
 //  Dispatcher

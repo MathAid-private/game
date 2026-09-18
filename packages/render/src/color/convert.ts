@@ -46,8 +46,21 @@
  *
  * @author MathAid
  */
-
-import { type ColorSpaceDef, type Mat3, OKLab, OKLCh, sRGB, XYZ_D65 } from './space';
+import {
+  CIE_Lab,
+  CIE_LCh,
+  type ColorSpaceDef,
+  HSL,
+  HSV,
+  HWB,
+  ICtCp,
+  type Mat3,
+  OKLab,
+  OKLCh,
+  sRGB,
+  XYZ_D65,
+  YCbCr,
+} from './space';
 
 // -----------------------------------------------------------------
 //  Core type
@@ -194,6 +207,37 @@ export function fromHex(hex: string): ColorValue<typeof sRGB> {
 //  Linear algebra helpers
 // -----------------------------------------------------------------
 
+/** PQ constants reused by ICtCp. */
+const ICtCp_M1 = 2610 / 16384;
+const ICtCp_M2 = (2523 / 4096) * 128;
+const ICtCp_C1 = 3424 / 4096;
+const ICtCp_C2 = (2413 / 4096) * 32;
+const ICtCp_C3 = (2392 / 4096) * 32;
+
+/**
+ * @summary
+ * Encode a linear luminance into PQ code value.
+ *
+ * @param L - The linear luminance in cd/m^2.
+ * @returns The PQ code value.
+ */
+function pqEncode(L: number): number {
+  const Lm = Math.max(0, L / 10000) ** ICtCp_M1;
+  return ((ICtCp_C1 + ICtCp_C2 * Lm) / (1 + ICtCp_C3 * Lm)) ** ICtCp_M2;
+}
+
+/**
+ * @summary
+ * Decode a PQ code value into linear luminance.
+ *
+ * @param E - The PQ code value.
+ * @returns The linear luminance in cd/m^2.
+ */
+function pqDecode(E: number): number {
+  const Em = Math.max(0, E) ** (1 / ICtCp_M2);
+  return 10000 * (Math.max(0, Em - ICtCp_C1) / (ICtCp_C2 - ICtCp_C3 * Em)) ** (1 / ICtCp_M1);
+}
+
 /**
  * @summary
  * Multiply a 3 by 3 row-major matrix by a column vector `[x, y, z]`.
@@ -253,6 +297,111 @@ const M_LMS_to_XYZ: Mat3 = [
 //  Space to XYZ D65
 // -----------------------------------------------------------------
 
+/** CIE Lab D65 white point. */
+const LAB_Xn = 0.95047;
+const LAB_Yn = 1.0;
+const LAB_Zn = 1.08883;
+
+/** CIE Lab f-function break point. */
+const LAB_EPSILON = 216 / 24389;
+/** CIE Lab kappa constant. */
+const LAB_KAPPA = 24389 / 27;
+
+/**
+ * @summary
+ * The CIE Lab f-function. Applies the cube-root curve.
+ *
+ * @param t - The normalized tristimulus value.
+ * @returns The transformed value.
+ */
+function labF(t: number): number {
+  return t > LAB_EPSILON ? Math.cbrt(t) : (LAB_KAPPA * t + 16) / 116;
+}
+
+/**
+ * @summary
+ * The inverse CIE Lab f-function.
+ *
+ * @param t - The transformed value.
+ * @returns The normalized tristimulus value.
+ */
+function labFInv(t: number): number {
+  const t3 = t * t * t;
+  return t3 > LAB_EPSILON ? t3 : (116 * t - 16) / LAB_KAPPA;
+}
+
+/** HSL to sRGB. H is in degrees. S and L are 0 to 1. */
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  if (s === 0) return [l, l, l];
+  const hh = (((h % 360) + 360) % 360) / 360;
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const hue2rgb = (t: number): number => {
+    let tt = t;
+    if (tt < 0) tt += 1;
+    if (tt > 1) tt -= 1;
+    if (tt < 1 / 6) return p + (q - p) * 6 * tt;
+    if (tt < 1 / 2) return q;
+    if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
+    return p;
+  };
+  return [hue2rgb(hh + 1 / 3), hue2rgb(hh), hue2rgb(hh - 1 / 3)];
+}
+
+/** sRGB to HSL. */
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  return [h * 60, s, l];
+}
+
+/** HSV to sRGB. */
+function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
+  const hh = (((h % 360) + 360) % 360) / 60;
+  const i = Math.floor(hh);
+  const f = hh - i;
+  const p = v * (1 - s);
+  const q = v * (1 - s * f);
+  const t = v * (1 - s * (1 - f));
+  switch (i % 6) {
+    case 0:
+      return [v, t, p];
+    case 1:
+      return [q, v, p];
+    case 2:
+      return [p, v, t];
+    case 3:
+      return [p, q, v];
+    case 4:
+      return [t, p, v];
+    default:
+      return [v, p, q];
+  }
+}
+
+/** sRGB to HSV. */
+function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const v = max;
+  const d = max - min;
+  const s = max === 0 ? 0 : d / max;
+  if (d === 0) return [0, s, v];
+  let h: number;
+  if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  return [h * 60, s, v];
+}
+
 /**
  * @summary
  * Convert a color in `space` to XYZ D65.
@@ -295,6 +444,89 @@ function toXYZ(
   if (id === OKLab.id) {
     const [l_, m_, s_] = mulMat3(M_Lab_to_LMS, r, g, b);
     return mulMat3(M_LMS_to_XYZ, l_ ** 3, m_ ** 3, s_ ** 3);
+  }
+
+  // ICtCp to XYZ D65.
+  if (id === ICtCp.id) {
+    const [lp, mp, sp] = mulMat3(M_ICtCp_to_LMS, r, g, b);
+    const L = pqDecode(lp);
+    const M = pqDecode(mp);
+    const S = pqDecode(sp);
+    return mulMat3(M_LMS_to_XYZ_ICtCp, L, M, S);
+  }
+
+  // HSL to sRGB to XYZ.
+  if (id === HSL.id) {
+    const [rr, gg, bb] = hslToRgb(r, g, b);
+    return toXYZ(sRGB, rr, gg, bb);
+  }
+
+  // HSV to sRGB to XYZ.
+  if (id === HSV.id) {
+    const [rr, gg, bb] = hsvToRgb(r, g, b);
+    return toXYZ(sRGB, rr, gg, bb);
+  }
+
+  // HWB to HSV to sRGB to XYZ.
+  if (id === HWB.id) {
+    const W = g;
+    const B = b;
+    const sum = W + B;
+    if (sum >= 1) {
+      const gray = W / sum;
+      return toXYZ(sRGB, gray, gray, gray);
+    }
+    const [hr, hg, hb] = hsvToRgb(r, 1, 1);
+    const scale = 1 - sum;
+    return toXYZ(sRGB, hr * scale + W, hg * scale + W, hb * scale + W);
+  }
+
+  // CIE Lab to XYZ (D65).
+  if (id === CIE_Lab.id) {
+    const fy = (r + 16) / 116;
+    const fx = g / 500 + fy;
+    const fz = fy - b / 200;
+    return [labFInv(fx) * LAB_Xn, labFInv(fy) * LAB_Yn, labFInv(fz) * LAB_Zn];
+  }
+
+  // CIE LCh to CIE Lab to XYZ.
+  if (id === CIE_LCh.id) {
+    const hRad = (b * Math.PI) / 180;
+    return toXYZ(CIE_Lab, r, g * Math.cos(hRad), g * Math.sin(hRad));
+  }
+
+  // YCbCr (BT.709) to sRGB to XYZ.
+  if (id === YCbCr.id) {
+    const Y = r;
+    const Cb = g;
+    const Cr = b;
+    const rr = Y + 1.5748 * Cr;
+    const gg = Y - 0.1873 * Cb - 0.4681 * Cr;
+    const bb = Y + 1.8556 * Cb;
+    return toXYZ(sRGB, rr, gg, bb);
+  }
+
+  // ICtCp to XYZ (D65).
+  if (id === ICtCp.id) {
+    const [lp, mp, sp] = mulMat3(
+      [0.000488, 0.000488, 0.000488, 0.000173, -0.000237, -0.000014, 0.000213, -0.00016, -0.000015],
+      r,
+      g,
+      b,
+    );
+    const L = pqDecode(lp);
+    const M = pqDecode(mp);
+    const S = pqDecode(sp);
+    return mulMat3(
+      [
+        2.0701800566956137, -1.3264568761030211, 0.20661600684785517, 0.3649882500326575,
+        0.6804673628522352, -0.04542175307585324, -0.0495955422389321, -0.0494211611867573,
+        1.1879959417328034,
+      ],
+      L,
+      M,
+      S,
+    );
   }
 
   // General path: decode the transfer, then apply the toXYZ matrix.
@@ -355,12 +587,108 @@ function fromXYZ(
     return [L, C, H];
   }
 
+  // XYZ D65 to ICtCp.
+  if (id === ICtCp.id) {
+    const [L, M, S] = mulMat3(M_XYZ_to_LMS_ICtCp, X, Y, Z);
+    const lp = pqEncode(L);
+    const mp = pqEncode(M);
+    const sp = pqEncode(S);
+    return mulMat3(M_LMS_to_ICtCp, lp, mp, sp);
+  }
+
+  // XYZ to CIE Lab (D65).
+  if (id === CIE_Lab.id) {
+    const fx = labF(X / LAB_Xn);
+    const fy = labF(Y / LAB_Yn);
+    const fz = labF(Z / LAB_Zn);
+    return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+  }
+
+  // XYZ to CIE LCh.
+  if (id === CIE_LCh.id) {
+    const [L, a, b] = fromXYZ(CIE_Lab, X, Y, Z);
+    const C = Math.sqrt(a * a + b * b);
+    const H = ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360;
+    return [L, C, H];
+  }
+
+  // XYZ to sRGB to HSL.
+  if (id === HSL.id) {
+    const c = fromXYZ(sRGB, X, Y, Z);
+    return rgbToHsl(c[0], c[1], c[2]);
+  }
+
+  // XYZ to sRGB to HSV.
+  if (id === HSV.id) {
+    const c = fromXYZ(sRGB, X, Y, Z);
+    return rgbToHsv(c[0], c[1], c[2]);
+  }
+
+  // XYZ to sRGB to HWB.
+  if (id === HWB.id) {
+    const c = fromXYZ(sRGB, X, Y, Z);
+    const [h, s, v] = rgbToHsv(c[0], c[1], c[2]);
+    const w = (1 - s) * v;
+    const bl = 1 - v;
+    return [h, w, bl];
+  }
+
+  // XYZ to sRGB to YCbCr.
+  if (id === YCbCr.id) {
+    const c = fromXYZ(sRGB, X, Y, Z);
+    const rr = c[0];
+    const gg = c[1];
+    const bb = c[2];
+    const Y2 = 0.2126 * rr + 0.7152 * gg + 0.0722 * bb;
+    const Cb = (bb - Y2) / 1.8556;
+    const Cr = (rr - Y2) / 1.5748;
+    return [Y, Cb, Cr];
+  }
+
+  // XYZ to ICtCp.
+  if (id === ICtCp.id) {
+    const [L, M, S] = mulMat3(
+      [0.3592, 0.6976, -0.0358, -0.1922, 1.1004, 0.0755, 0.007, 0.0749, 0.8434],
+      X,
+      Y,
+      Z,
+    );
+    const lp = pqEncode(L);
+    const mp = pqEncode(M);
+    const sp = pqEncode(S);
+    return mulMat3([2048, 2048, 0, 6610, -13613, 7003, 17933, -17390, -543], lp, mp, sp);
+  }
+
   // General path: apply the fromXYZ matrix, then encode the transfer.
   const { transfer, fromXYZ: mat } = space.descriptor;
   if (!mat) throw new Error(`Space "${id}" has no fromXYZ matrix.`);
   const [rLin, gLin, bLin] = mulMat3(mat, X, Y, Z);
   return [transfer.oetf(rLin), transfer.oetf(gLin), transfer.oetf(bLin)];
 }
+
+// -----------------------------------------------------------------
+//  CIE Lab and ICtCp helpers
+// -----------------------------------------------------------------
+
+/** ICtCp XYZ to LMS matrix from the Dolby white paper. */
+const M_XYZ_to_LMS_ICtCp: Mat3 = [
+  0.3592, 0.6976, -0.0358, -0.1922, 1.1004, 0.0755, 0.007, 0.0749, 0.8434,
+];
+
+/** ICtCp LMS to XYZ matrix. The inverse of `M_XYZ_to_LMS_ICtCp`. */
+const M_LMS_to_XYZ_ICtCp: Mat3 = [
+  2.0701800566956137, -1.3264568761030211, 0.20661600684785517, 0.3649882500326575,
+  0.6804673628522352, -0.04542175307585324, -0.0495955422389321, -0.0494211611867573,
+  1.1879959417328034,
+];
+
+/** ICtCp LMS to ICtCp matrix. */
+const M_LMS_to_ICtCp: Mat3 = [2048, 2048, 0, 6610, -13613, 7003, 17933, -17390, -543];
+
+/** ICtCp to LMS matrix. The inverse of `M_LMS_to_ICtCp`. */
+const M_ICtCp_to_LMS: Mat3 = [
+  0.000488, 0.000488, 0.000488, 0.000173, -0.000237, -0.000014, 0.000213, -0.00016, -0.000015,
+];
 
 // -----------------------------------------------------------------
 //  Public API

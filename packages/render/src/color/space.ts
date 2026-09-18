@@ -783,6 +783,173 @@ export const OKLCh = makeSpace('OKLCh', {
   channelNames: ['L', 'C', 'H'],
 });
 
+/**
+ * @summary
+ * HSL. A cylindrical tooling space.
+ *
+ * @description
+ * H is the hue in degrees. S and L run 0 to 1. HSL is not
+ * perceptually uniform. It is common in UI design tools. Use it for
+ * authoring and for CSS interop. Do not use it for blending.
+ *
+ * @see {@link https://www.w3.org/TR/css-color-4/#the-hsl-notation} CSS Color 4 HSL
+ */
+export const HSL = makeSpace('HSL', {
+  name: 'HSL (CSS cylindrical)',
+  isLinear: false,
+  transfer: linear,
+  channelRanges: [
+    { min: -Infinity, max: Infinity },
+    { min: 0, max: 1 },
+    { min: 0, max: 1 },
+  ],
+  channelNames: ['H', 'S', 'L'],
+});
+
+/**
+ * @summary
+ * HSV. A cylindrical tooling space.
+ *
+ * @description
+ * H is the hue in degrees. S and V run 0 to 1. HSV is not
+ * perceptually uniform. It is common in color pickers. The V channel
+ * is the maximum of the three RGB channels. The S channel is the
+ * normalized chroma above the minimum.
+ */
+export const HSV = makeSpace('HSV', {
+  name: 'HSV (hue, saturation, value)',
+  isLinear: false,
+  transfer: linear,
+  channelRanges: [
+    { min: -Infinity, max: Infinity },
+    { min: 0, max: 1 },
+    { min: 0, max: 1 },
+  ],
+  channelNames: ['H', 'S', 'V'],
+});
+
+/**
+ * @summary
+ * HWB. A cylindrical tooling space.
+ *
+ * @description
+ * H is the hue in degrees. W is whiteness. B is blackness. Both run 0
+ * to 1. When W + B is at least 1, the color is a gray. HWB is common
+ * in CSS. It maps cleanly to and from HSV.
+ *
+ * @see {@link https://www.w3.org/TR/css-color-4/#the-hwb-notation} CSS Color 4 HWB
+ */
+export const HWB = makeSpace('HWB', {
+  name: 'HWB (hue, whiteness, blackness)',
+  isLinear: false,
+  transfer: linear,
+  channelRanges: [
+    { min: -Infinity, max: Infinity },
+    { min: 0, max: 1 },
+    { min: 0, max: 1 },
+  ],
+  channelNames: ['H', 'W', 'B'],
+});
+
+/**
+ * @summary
+ * CIE 1976 Lab with a D65 white point.
+ *
+ * @description
+ * L runs 0 to 100. a and b are roughly -128 to 127 for real colors.
+ * The space is perceptually more uniform than XYZ. It is older than
+ * OKLab and less accurate for small differences. Use `deltaE2000` for
+ * difference metrics in this space.
+ *
+ * @see {@link https://en.wikipedia.org/wiki/CIELAB_color_space} CIE Lab
+ */
+export const CIE_Lab = makeSpace('CIE_Lab', {
+  name: 'CIE 1976 Lab (D65)',
+  isLinear: false,
+  transfer: linear,
+  channelRanges: [
+    { min: 0, max: 100 },
+    { min: -128, max: 127 },
+    { min: -128, max: 127 },
+  ],
+  channelNames: ['L', 'a', 'b'],
+});
+
+/**
+ * @summary
+ * CIE 1976 LCh. The polar form of CIE Lab.
+ *
+ * @description
+ * L runs 0 to 100. C is chroma. H is the hue in degrees. The space is
+ * rectangular Lab in polar form. H wraps by definition.
+ *
+ * @see {@link https://en.wikipedia.org/wiki/CIELAB_color_space} CIE Lab
+ */
+export const CIE_LCh = makeSpace('CIE_LCh', {
+  name: 'CIE 1976 LCh (D65)',
+  isLinear: false,
+  transfer: linear,
+  channelRanges: [
+    { min: 0, max: 100 },
+    { min: 0, max: 150 },
+    { min: -Infinity, max: Infinity },
+  ],
+  channelNames: ['L', 'C', 'H'],
+});
+
+/**
+ * @summary
+ * YCbCr with ITU-R BT.709 coefficients.
+ *
+ * @description
+ * Y is luma, 0 to 1. Cb and Cr are the blue and red chroma
+ * differences, roughly -0.5 to 0.5. The space is common in video
+ * pipelines. The coefficients match the BT.709 primaries used by sRGB
+ * and Rec.2020 SDR.
+ *
+ * Use this only for BT.709 content. BT.601 and BT.2020 use different
+ * coefficients. Add a separate space if you need them.
+ *
+ * @see {@link https://www.itu.int/rec/R-REC-BT.709} ITU-R BT.709
+ */
+export const YCbCr = makeSpace('YCbCr', {
+  name: 'YCbCr (BT.709)',
+  isLinear: false,
+  transfer: linear,
+  channelRanges: [
+    { min: 0, max: 1 },
+    { min: -0.5, max: 0.5 },
+    { min: -0.5, max: 0.5 },
+  ],
+  channelNames: ['Y', 'Cb', 'Cr'],
+});
+
+/**
+ * @summary
+ * Dolby ICtCp. An HDR perceptual space.
+ *
+ * @description
+ * I is intensity, 0 to 1. Ct and Cp are the blue and red chroma
+ * differences, roughly -0.5 to 0.5. ICtCp is designed for HDR and
+ * wide gamut content. It is more uniform than PQ RGB.
+ *
+ * Use it for HDR quality checks and for HDR tone mapping. Use
+ * `deltaEITP` for difference metrics in this space.
+ *
+ * @see {@link https://professional.dolby.com/siteassets/pdfs/ictcp_dolbywhitepaper_v071.pdf} Dolby ICtCp
+ */
+export const ICtCp = makeSpace('ICtCp', {
+  name: 'Dolby ICtCp',
+  isLinear: false,
+  transfer: linear,
+  channelRanges: [
+    { min: 0, max: 1 },
+    { min: -0.5, max: 0.5 },
+    { min: -0.5, max: 0.5 },
+  ],
+  channelNames: ['I', 'Ct', 'Cp'],
+});
+
 // -----------------------------------------------------------------
 //  Union convenience type
 // -----------------------------------------------------------------
@@ -812,7 +979,14 @@ export type AnyColorSpace =
   | typeof ACES_AP1
   | typeof XYZ_D65
   | typeof OKLab
-  | typeof OKLCh;
+  | typeof OKLCh
+  | typeof HSL
+  | typeof HSV
+  | typeof HWB
+  | typeof CIE_Lab
+  | typeof CIE_LCh
+  | typeof YCbCr
+  | typeof ICtCp;
 
 /**
  * @summary

@@ -64,10 +64,10 @@ import { type ColorSpaceDef } from './space';
  * const blue = make(sRGB, 0, 0, 1, 1);
  * over(halfRed, blue);  // a blend of red and blue
  */
-export function over<
-  Src extends ColorSpaceDef<string>,
-  Dst extends ColorSpaceDef<string>,
->(src: ColorValue<Src>, dst: ColorValue<Dst>): ColorValue<Dst> {
+export function over<Src extends ColorSpaceDef<string>, Dst extends ColorSpaceDef<string>>(
+  src: ColorValue<Src>,
+  dst: ColorValue<Dst>,
+): ColorValue<Dst> {
   const s = convert(src, dst._space);
   const sa = s.a;
   const da = dst.a;
@@ -104,10 +104,10 @@ export function over<
  * const halfBlue = make(sRGB, 0, 0, 1, 0.5);
  * under(red, halfBlue);  // blue covers red at half alpha
  */
-export function under<
-  Src extends ColorSpaceDef<string>,
-  Dst extends ColorSpaceDef<string>,
->(src: ColorValue<Src>, dst: ColorValue<Dst>): ColorValue<Src> {
+export function under<Src extends ColorSpaceDef<string>, Dst extends ColorSpaceDef<string>>(
+  src: ColorValue<Src>,
+  dst: ColorValue<Dst>,
+): ColorValue<Src> {
   return over(dst, src) as unknown as ColorValue<Src>;
 }
 
@@ -134,9 +134,7 @@ export function under<
  * @example
  * premultiply(make(sRGB, 1, 0, 0, 0.5));  // sRGB(0.5, 0, 0, 0.5)
  */
-export function premultiply<S extends ColorSpaceDef<string>>(
-  color: ColorValue<S>,
-): ColorValue<S> {
+export function premultiply<S extends ColorSpaceDef<string>>(color: ColorValue<S>): ColorValue<S> {
   const a = color.a;
   return make(color._space, color.r * a, color.g * a, color.b * a, a);
 }

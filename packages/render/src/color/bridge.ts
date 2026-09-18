@@ -98,9 +98,7 @@ export function fromFloat32Array<S extends ColorSpaceDef<string>>(
   space: S,
 ): ReadonlyArray<ColorValue<S>> {
   if (data.length % 4 !== 0) {
-    throw new Error(
-      `fromFloat32Array: data length must be a multiple of 4, got ${data.length}.`,
-    );
+    throw new Error(`fromFloat32Array: data length must be a multiple of 4, got ${data.length}.`);
   }
   const count = data.length / 4;
   const out: ColorValue<S>[] = new Array(count);
@@ -179,9 +177,7 @@ export function fromUint8Array<S extends ColorSpaceDef<string>>(
   space: S,
 ): ReadonlyArray<ColorValue<S>> {
   if (data.length % 4 !== 0) {
-    throw new Error(
-      `fromUint8Array: data length must be a multiple of 4, got ${data.length}.`,
-    );
+    throw new Error(`fromUint8Array: data length must be a multiple of 4, got ${data.length}.`);
   }
   const count = data.length / 4;
   const out: ColorValue<S>[] = new Array(count);
@@ -242,10 +238,10 @@ function toByte(v: number): number {
  * const linear = convertBatch(encoded, Linear_sRGB);
  * // linear[0] has the same color in linear space.
  */
-export function convertBatch<
-  Src extends ColorSpaceDef<string>,
-  Dst extends ColorSpaceDef<string>,
->(colors: ReadonlyArray<ColorValue<Src>>, dst: Dst): ReadonlyArray<ColorValue<Dst>> {
+export function convertBatch<Src extends ColorSpaceDef<string>, Dst extends ColorSpaceDef<string>>(
+  colors: ReadonlyArray<ColorValue<Src>>,
+  dst: Dst,
+): ReadonlyArray<ColorValue<Dst>> {
   const out: ColorValue<Dst>[] = new Array(colors.length);
   for (let i = 0; i < colors.length; i++) {
     out[i] = convert(colors[i]!, dst);

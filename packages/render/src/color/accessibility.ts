@@ -104,10 +104,10 @@ export function luminance<S extends ColorSpaceDef<string>>(color: ColorValue<S>)
  * contrast(make(sRGB, 1, 1, 1), make(sRGB, 0, 0, 0));  // 21
  * contrast(make(sRGB, 0.5, 0.5, 0.5), make(sRGB, 0.5, 0.5, 0.5));  // 1
  */
-export function contrast<
-  A extends ColorSpaceDef<string>,
-  B extends ColorSpaceDef<string>,
->(a: ColorValue<A>, b: ColorValue<B>): number {
+export function contrast<A extends ColorSpaceDef<string>, B extends ColorSpaceDef<string>>(
+  a: ColorValue<A>,
+  b: ColorValue<B>,
+): number {
   const la = luminance(a);
   const lb = luminance(b);
   const light = Math.max(la, lb);
