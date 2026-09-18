@@ -401,6 +401,138 @@ const hlgTransfer: TransferFunctions = {
 };
 
 // -----------------------------------------------------------------
+//  Log transfer functions
+// -----------------------------------------------------------------
+
+/** ACEScct linear segment break point. */
+const ACEScct_CUT = 0.0078125;
+/** ACEScct linear segment slope. */
+const ACEScct_A = 10.5402377416545;
+/** ACEScct linear segment offset. */
+const ACEScct_B = 0.0729055341958355;
+/** ACEScct log segment scale. */
+const ACEScct_C = 17.52;
+/** ACEScct log segment offset. */
+const ACEScct_D = 9.72;
+
+/**
+ * @summary
+ * The ACEScct transfer pair.
+ *
+ * @description
+ * ACEScct is a log encoding of the ACES AP1 linear space. It uses a
+ * small linear segment near black, then a log segment. The linear
+ * segment gives ACEScct a true black, unlike ACEScc. Editors use
+ * ACEScct for color grading.
+ *
+ * The linear segment below 0.0078125 is smooth. Above it the curve is
+ * logarithmic with a slope of 1 at the break point.
+ *
+ * @see {@link https://docs.acescentral.com/specifications/acescct/} ACEScct specification
+ */
+const acesCctTransfer: TransferFunctions = {
+  eotf: (cct) => {
+    if (cct <= ACEScct_A * ACEScct_CUT + ACEScct_B) {
+      return (cct - ACEScct_B) / ACEScct_A;
+    }
+    return 2 ** (cct * ACEScct_C - ACEScct_D);
+  },
+  oetf: (lin) => {
+    if (lin <= ACEScct_CUT) {
+      return ACEScct_A * lin + ACEScct_B;
+    }
+    return (Math.log2(lin) + ACEScct_D) / ACEScct_C;
+  },
+};
+
+/**
+ * @summary
+ * The ACEScc transfer pair.
+ *
+ * @description
+ * ACEScc is a pure log encoding of ACES AP1. There is no linear
+ * segment. The result has no true black: the minimum code value maps
+ * to a small positive linear value. Editors use ACEScc for logarithmic
+ * grading workflows.
+ *
+ * The curve uses a two-piece formula below the linear threshold. The
+ * first piece handles negative linear values, which are clamped to the
+ * minimum code. The second piece handles values up to `2 ** -15`.
+ *
+ * @see {@link https://docs.acescentral.com/specifications/acescc/} ACEScc specification
+ */
+const acesCcTransfer: TransferFunctions = {
+  eotf: (cc) => {
+    const minCode = (Math.log2(2 ** -16) + ACEScct_D) / ACEScct_C;
+    const maxCode = (Math.log2(65504) + ACEScct_D) / ACEScct_C;
+    if (cc < minCode) return 0;
+    if (cc < maxCode) {
+      const v = 2 ** (cc * ACEScct_C - ACEScct_D);
+      if (v < 2 ** -15) return (v - 2 ** -16) * 2;
+      return v;
+    }
+    return 65504;
+  },
+  oetf: (lin) => {
+    if (lin <= 0) {
+      return (Math.log2(2 ** -16) + ACEScct_D) / ACEScct_C;
+    }
+    if (lin < 2 ** -15) {
+      return (Math.log2(2 ** -16 + lin * 0.5) + ACEScct_D) / ACEScct_C;
+    }
+    if (lin > 65504) {
+      return (Math.log2(65504) + ACEScct_D) / ACEScct_C;
+    }
+    return (Math.log2(lin) + ACEScct_D) / ACEScct_C;
+  },
+};
+
+/** ARRI LogC3 EI 800 break point in linear. */
+const LOGC3_CUT = 0.010591;
+/** ARRI LogC3 EI 800 coefficient a. */
+const LOGC3_A = 5.555556;
+/** ARRI LogC3 EI 800 coefficient b. */
+const LOGC3_B = 0.052272;
+/** ARRI LogC3 EI 800 coefficient c. */
+const LOGC3_C = 0.24719;
+/** ARRI LogC3 EI 800 coefficient d. */
+const LOGC3_D = 0.385537;
+/** ARRI LogC3 EI 800 coefficient e. */
+const LOGC3_E = 5.367655;
+/** ARRI LogC3 EI 800 coefficient f. */
+const LOGC3_F = 0.092809;
+
+/**
+ * @summary
+ * The ARRI LogC3 transfer pair at EI 800.
+ *
+ * @description
+ * ARRI LogC3 is a log encoding of the ARRI Wide Gamut 3 linear space.
+ * It has a linear segment near black and a log segment above it. The
+ * EI 800 parameters match the camera's default rating.
+ *
+ * The curve is used by ALEXA and by other ARRI cameras. It is common
+ * in film and in episodic television post-production.
+ *
+ * @see {@link https://www.arri.com/en/learn-help/learn-help-camera-system/white-papers} ARRI white papers
+ */
+const logC3Transfer: TransferFunctions = {
+  eotf: (log) => {
+    const breakCode = LOGC3_E * LOGC3_CUT + LOGC3_F;
+    if (log >= breakCode) {
+      return (10 ** ((log - LOGC3_D) / LOGC3_C) - LOGC3_B) / LOGC3_A;
+    }
+    return (log - LOGC3_F) / LOGC3_E;
+  },
+  oetf: (lin) => {
+    if (lin >= LOGC3_CUT) {
+      return LOGC3_C * Math.log10(LOGC3_A * lin + LOGC3_B) + LOGC3_D;
+    }
+    return LOGC3_E * lin + LOGC3_F;
+  },
+};
+
+// -----------------------------------------------------------------
 //  Primary matrices
 // -----------------------------------------------------------------
 
@@ -468,6 +600,27 @@ const M_AP1_to_XYZ: Mat3 = [
 const M_XYZ_to_AP1: Mat3 = [
   1.6410233797, -0.3248032942, -0.2364246952, -0.6636628587, 1.6153315917, 0.0167563477,
   0.0117218943, -0.008284442, 0.9883948585,
+];
+
+/**
+ * @summary
+ * ARRI Wide Gamut 3 primaries to XYZ D65.
+ *
+ * @description
+ * Used by the ARRI LogC3 transfer curve. The primaries cover a wide
+ * gamut similar to Rec.2020.
+ *
+ * @see {@link https://www.arri.com/en/learn-help/learn-help-camera-system/white-papers} ARRI white papers
+ */
+const M_AWG_to_XYZ: Mat3 = [
+  0.6380081, 0.2147041, 0.0977439, 0.2919536, 0.8238412, -0.1157948, 0.0027983, -0.0670341,
+  1.1532944,
+];
+
+/** @summary The inverse of `M_AWG_to_XYZ`. XYZ D65 to ARRI Wide Gamut 3. */
+const M_XYZ_to_AWG: Mat3 = [
+  1.7890658, -0.4822018, -0.2000705, -0.6391092, 1.3962747, 0.1943174, -0.0414644, 0.0893456,
+  0.8766034,
 ];
 
 // -----------------------------------------------------------------
@@ -720,6 +873,90 @@ export const ACES_AP1 = makeSpace('ACES_AP1', {
 
 /**
  * @summary
+ * ACEScct. A log encoding of the ACES AP1 linear space.
+ *
+ * @description
+ * ACEScct uses the ACES AP1 primaries and a transfer pair with a
+ * short linear segment near black. The linear segment gives true
+ * black. Use ACEScct for color grading and for interchange between
+ * grading tools.
+ *
+ * The channel range is the log code value range. It is roughly
+ * -0.0729 to 1.468. Values above 1 are legal and represent HDR
+ * highlights.
+ *
+ * @see {@link https://docs.acescentral.com/specifications/acescct/} ACEScct specification
+ */
+export const ACEScct = makeSpace('ACEScct', {
+  name: 'ACEScct (ACES log with toe)',
+  isLinear: false,
+  toXYZ: M_AP1_to_XYZ,
+  fromXYZ: M_XYZ_to_AP1,
+  transfer: acesCctTransfer,
+  channelRanges: [
+    { min: -0.08, max: 1.5 },
+    { min: -0.08, max: 1.5 },
+    { min: -0.08, max: 1.5 },
+  ],
+  channelNames: ['R', 'G', 'B'],
+});
+
+/**
+ * @summary
+ * ACEScc. A pure log encoding of the ACES AP1 linear space.
+ *
+ * @description
+ * ACEScc uses the ACES AP1 primaries and a pure log transfer pair.
+ * There is no linear segment. The curve has no true black: the
+ * minimum code value maps to a small positive value. Use ACEScc for
+ * log grading workflows that expect a continuous log curve.
+ *
+ * @see {@link https://docs.acescentral.com/specifications/acescc/} ACEScc specification
+ */
+export const ACEScc = makeSpace('ACEScc', {
+  name: 'ACEScc (pure ACES log)',
+  isLinear: false,
+  toXYZ: M_AP1_to_XYZ,
+  fromXYZ: M_XYZ_to_AP1,
+  transfer: acesCcTransfer,
+  channelRanges: [
+    { min: -0.36, max: 1.47 },
+    { min: -0.36, max: 1.47 },
+    { min: -0.36, max: 1.47 },
+  ],
+  channelNames: ['R', 'G', 'B'],
+});
+
+/**
+ * @summary
+ * ARRI LogC3 at EI 800. A log encoding of ARRI Wide Gamut 3.
+ *
+ * @description
+ * LogC3 uses the ARRI Wide Gamut 3 primaries. The transfer pair has a
+ * linear segment near black and a log segment above it. The EI 800
+ * parameters are the camera's default rating.
+ *
+ * Use LogC3 when ingesting ALEXA footage or when matching a DI
+ * pipeline that expects ARRI curves.
+ *
+ * @see {@link https://www.arri.com/en/learn-help/learn-help-camera-system/white-papers} ARRI white papers
+ */
+export const LogC3 = makeSpace('LogC3', {
+  name: 'ARRI LogC3 (EI 800)',
+  isLinear: false,
+  toXYZ: M_AWG_to_XYZ,
+  fromXYZ: M_XYZ_to_AWG,
+  transfer: logC3Transfer,
+  channelRanges: [
+    { min: -0.25, max: 1.0 },
+    { min: -0.25, max: 1.0 },
+    { min: -0.25, max: 1.0 },
+  ],
+  channelNames: ['R', 'G', 'B'],
+});
+
+/**
+ * @summary
  * CIE XYZ with a D65 white point. The interchange space for conversion.
  *
  * @description
@@ -956,7 +1193,7 @@ export const ICtCp = makeSpace('ICtCp', {
 
 /**
  * @summary
- * The union of every space object the library ships.
+ * The union of every space object in this module.
  *
  * @description
  * Use this when a function accepts any built-in space. The union is
@@ -977,6 +1214,9 @@ export type AnyColorSpace =
   | typeof HLG_Rec2020
   | typeof ACES_AP0
   | typeof ACES_AP1
+  | typeof ACEScct
+  | typeof ACEScc
+  | typeof LogC3
   | typeof XYZ_D65
   | typeof OKLab
   | typeof OKLCh
@@ -987,7 +1227,6 @@ export type AnyColorSpace =
   | typeof CIE_LCh
   | typeof YCbCr
   | typeof ICtCp;
-
 /**
  * @summary
  * The string IDs of every built-in space.

@@ -3,27 +3,18 @@
  *
  * @summary
  * Re-exports the backend adapters, the conversion engine, the gamut
- * mapping functions, the color space type system, the Milestone 1 and
- * 2 extensions, and the Milestone 3 authoring tools.
+ * mapping functions, the color space type system, and every extension
+ * module across the four milestones.
  *
  * @description
  * Import from this file to get the full public API. See the README in
- * this directory for a full module map.
- *
- * @example
- * import {
- *   make, convert, mapToGamut, format,
- *   sRGB, Display_P3, OKLCh, DX12,
- *   lighten, over, contrast, deltaEOK,
- *   toFloat32Array, toRgb565,
- *   sampleLinear, type LinearGradient,
- *   fromCSS, toCSS, toneMap,
- * } from './index.js';
+ * this directory for a full module map and usage examples.
  *
  * @author MathAid
  */
 
 export * from './accessibility';
+export * from './adaptation';
 export * from './backend';
 export * from './bridge';
 export * from './composite';
@@ -34,6 +25,7 @@ export * from './gradient';
 export * from './mutable';
 export * from './operations';
 export * from './packed';
+export * from './quantize';
 export * from './space';
 export * from './tone-mapping';
 export * from './w3c';
