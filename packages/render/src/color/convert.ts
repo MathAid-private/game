@@ -54,6 +54,8 @@ import {
   HSV,
   HWB,
   ICtCp,
+  Jzazbz,
+  JzCzHz,
   type Mat3,
   OKLab,
   OKLCh,
@@ -455,6 +457,26 @@ function toXYZ(
     return mulMat3(M_LMS_to_XYZ_ICtCp, L, M, S);
   }
 
+    // Jzazbz to XYZ D65.
+  if (id === Jzazbz.id) {
+    // Undo the Jz offset and scale.
+    const Jzp = (r + JZAZBZ_D0) / (1 + JZAZBZ_D - JZAZBZ_D * (r + JZAZBZ_D0));
+    const [Lp, Mp, Sp] = mulMat3(M_JZAZBZ_TO_IZAZBZ, Jzp, g, b);
+    const L = jzazbzPqInverse(Lp);
+    const M = jzazbzPqInverse(Mp);
+    const S = jzazbzPqInverse(Sp);
+    const [Xp, Yp, Z] = mulMat3(M_LMS_TO_XYZ_JZAZBZ, L, M, S);
+    const X = (Xp + (JZAZBZ_B - 1) * Z) / JZAZBZ_B;
+    const Y = (Yp + (JZAZBZ_G - 1) * X) / JZAZBZ_G;
+    return [X, Y, Z];
+  }
+
+  // JzCzHz to Jzazbz to XYZ.
+  if (id === JzCzHz.id) {
+    const hRad = (b * Math.PI) / 180;
+    return toXYZ(Jzazbz, r, g * Math.cos(hRad), g * Math.sin(hRad));
+  }
+
   // HSL to sRGB to XYZ.
   if (id === HSL.id) {
     const [rr, gg, bb] = hslToRgb(r, g, b);
@@ -536,6 +558,90 @@ function toXYZ(
   const gLin = transfer.eotf(g);
   const bLin = transfer.eotf(b);
   return mulMat3(mat, rLin, gLin, bLin);
+}
+
+// -----------------------------------------------------------------
+//  Jzazbz constants and helpers
+// -----------------------------------------------------------------
+
+/** Jzazbz b constant. Scales X in the pre-matrix step. */
+const JZAZBZ_B = 1.15;
+/** Jzazbz g constant. Scales Y in the pre-matrix step. */
+const JZAZBZ_G = 0.66;
+/** Jzazbz reference luminance in cd/m^2. */
+const JZAZBZ_L_REF = 10000;
+/** Jzazbz PQ-like p exponent. */
+const JZAZBZ_P = 1.7 * 2523 / 2 ** 5;
+/** Jzazbz PQ-like c1 constant. */
+const JZAZBZ_C1 = 3424 / 2 ** 12;
+/** Jzazbz PQ-like c2 constant. */
+const JZAZBZ_C2 = 2413 / 2 ** 7;
+/** Jzazbz PQ-like c3 constant. */
+const JZAZBZ_C3 = 2392 / 2 ** 7;
+/** Jzazbz PQ-like n exponent. */
+const JZAZBZ_N = 2610 / 2 ** 14;
+/** Jzazbz Izazbz-to-Jzazbz scale. */
+const JZAZBZ_D = -0.56;
+/** Jzazbz Jzazbz-to-Jzazbz offset. */
+const JZAZBZ_D0 = 1.6295499532821566e-11;
+
+/** XYZ D65 to LMS in the Jzazbz pre-adaptation step. */
+const M_XYZ_TO_LMS_JZAZBZ: Mat3 = [
+   0.41478972, 0.57999900, 0.01464800,
+  -0.20151000, 1.12064900, 0.05310080,
+  -0.01660080, 0.26480000, 0.66847990,
+];
+
+/** The inverse of `M_XYZ_TO_LMS_JZAZBZ`. */
+const M_LMS_TO_XYZ_JZAZBZ: Mat3 = [
+   1.9242264357876067, -1.0047923125953657,  0.037651404030618,
+   0.3503167620949991,  0.7264811939316552, -0.0653844229480850,
+  -0.0909828109828475, -0.3127282905230739,  1.5227665613052603,
+];
+
+/** Izazbz to Jzazbz opponent matrix. */
+const M_IZAZBZ_TO_JZAZBZ: Mat3 = [
+  0.50000000,  0.50000000,  0.00000000,
+  3.52400000, -4.06670800,  0.54270800,
+  0.19907600,  1.09679900, -1.29587500,
+];
+
+/** The inverse of `M_IZAZBZ_TO_JZAZBZ`. */
+const M_JZAZBZ_TO_IZAZBZ: Mat3 = [
+  1.0,                  0.1386050432715393,   0.0580473161561189,
+  1.0,                 -0.1386050432715393,  -0.0580473161561189,
+  1.0,                 -0.0960192420263189,  -0.8118918960560388,
+];
+
+/**
+ * @summary
+ * The Jzazbz PQ-like forward curve.
+ *
+ * @description
+ * Takes a linear LMS value in cd/m^2 and returns a PQ-like code value
+ * in 0 to 1. This curve is similar to ST.2084 but uses different
+ * constants.
+ *
+ * @param v - The linear luminance.
+ * @returns The code value.
+ */
+function jzazbzPqForward(v: number): number {
+  const vp = Math.max(0, v / JZAZBZ_L_REF) ** JZAZBZ_N;
+  return ((JZAZBZ_C1 + JZAZBZ_C2 * vp) / (1 + JZAZBZ_C3 * vp)) ** JZAZBZ_P;
+}
+
+/**
+ * @summary
+ * The Jzazbz PQ-like inverse curve.
+ *
+ * @param v - The code value.
+ * @returns The linear luminance in cd/m^2.
+ */
+function jzazbzPqInverse(v: number): number {
+  const vp = Math.max(0, v) ** (1 / JZAZBZ_P);
+  const num = Math.max(0, JZAZBZ_C1 - vp);
+  const den = JZAZBZ_C3 * vp - JZAZBZ_C2;
+  return JZAZBZ_L_REF * (num / den) ** (1 / JZAZBZ_N);
 }
 
 // -----------------------------------------------------------------
@@ -657,6 +763,27 @@ function fromXYZ(
     const mp = pqEncode(M);
     const sp = pqEncode(S);
     return mulMat3([2048, 2048, 0, 6610, -13613, 7003, 17933, -17390, -543], lp, mp, sp);
+  }
+
+  // XYZ D65 to Jzazbz.
+  if (id === Jzazbz.id) {
+    const Xp = JZAZBZ_B * X - (JZAZBZ_B - 1) * Z;
+    const Yp = JZAZBZ_G * Y - (JZAZBZ_G - 1) * X;
+    const [L, M, S] = mulMat3(M_XYZ_TO_LMS_JZAZBZ, Xp, Yp, Z);
+    const Lp = jzazbzPqForward(L);
+    const Mp = jzazbzPqForward(M);
+    const Sp = jzazbzPqForward(S);
+    const [Iz, az, bz] = mulMat3(M_IZAZBZ_TO_JZAZBZ, Lp, Mp, Sp);
+    const Jz = ((1 + JZAZBZ_D) * Iz) / (1 + JZAZBZ_D * Iz) - JZAZBZ_D0;
+    return [Jz, az, bz];
+  }
+
+  // XYZ D65 to JzCzHz.
+  if (id === JzCzHz.id) {
+    const [Jz, az, bz] = fromXYZ(Jzazbz, X, Y, Z);
+    const Cz = Math.sqrt(az * az + bz * bz);
+    const Hz = ((Math.atan2(bz, az) * 180) / Math.PI + 360) % 360;
+    return [Jz, Cz, Hz];
   }
 
   // General path: apply the fromXYZ matrix, then encode the transfer.

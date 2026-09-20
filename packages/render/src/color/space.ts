@@ -1187,6 +1187,58 @@ export const ICtCp = makeSpace('ICtCp', {
   channelNames: ['I', 'Ct', 'Cp'],
 });
 
+/**
+ * @summary
+ * Jzazbz by Safdar et al 2017. An HDR perceptual space.
+ *
+ * @description
+ * Jzazbz is designed for HDR. It is more uniform than OKLab above
+ * 1000 cd/m^2. The three channels are Jz (lightness), az (red-green),
+ * and bz (yellow-blue).
+ *
+ * The space uses an absolute luminance reference. The reference is
+ * 10000 cd/m^2. Values below this scale linearly. Values above it
+ * compress with a PQ-like curve.
+ *
+ * The path from XYZ D65 is not a single matrix. The engine wires it
+ * into `convert.ts` as a special case. See `toXYZ` and `fromXYZ`.
+ *
+ * @see {@link https://www.osapublishing.org/oe/fulltext.cfm?uri=oe-25-13-15131} Safdar et al 2017
+ */
+export const Jzazbz = makeSpace('Jzazbz', {
+  name: 'Jzazbz (Safdar 2017)',
+  isLinear: false,
+  transfer: linear,
+  channelRanges: [
+    { min: -0.1, max: 1.0 },
+    { min: -0.5, max: 0.5 },
+    { min: -0.5, max: 0.5 },
+  ],
+  channelNames: ['Jz', 'az', 'bz'],
+});
+
+/**
+ * @summary
+ * JzCzHz. The polar form of Jzazbz.
+ *
+ * @description
+ * Jz is lightness. Cz is chroma. Hz is the hue in degrees. Hz wraps
+ * by definition.
+ *
+ * @see {@link https://www.osapublishing.org/oe/fulltext.cfm?uri=oe-25-13-15131} Safdar et al 2017
+ */
+export const JzCzHz = makeSpace('JzCzHz', {
+  name: 'JzCzHz (Jzazbz polar)',
+  isLinear: false,
+  transfer: linear,
+  channelRanges: [
+    { min: -0.1, max: 1.0 },
+    { min: 0, max: 0.5 },
+    { min: -Infinity, max: Infinity },
+  ],
+  channelNames: ['Jz', 'Cz', 'Hz'],
+});
+
 // -----------------------------------------------------------------
 //  Union convenience type
 // -----------------------------------------------------------------
@@ -1226,7 +1278,9 @@ export type AnyColorSpace =
   | typeof CIE_Lab
   | typeof CIE_LCh
   | typeof YCbCr
-  | typeof ICtCp;
+  | typeof ICtCp
+  | typeof Jzazbz
+  | typeof JzCzHz;
 /**
  * @summary
  * The string IDs of every built-in space.

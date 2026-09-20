@@ -316,3 +316,93 @@ export function checkGamutAll<S extends ColorSpaceDef<string>>(
   }
   return out;
 }
+
+/**
+ * @summary
+ * Expand a color into a wider gamut.
+ *
+ * @description
+ * The function is the inverse of `mapToGamut`. It takes an in-gamut
+ * color and pushes the chroma toward the target gamut boundary. The
+ * hue and lightness stay the same.
+ *
+ * The expansion runs in OKLCh. It binary-searches the maximum chroma
+ * that keeps the color inside the target gamut. The `amount` argument
+ * scales the result between the input chroma and that boundary.
+ *
+ * ```text
+ *     Chroma
+ *       ^
+ *       |     boundary
+ *       |    /
+ *       |   /  <-- search up the hue ray
+ *       |  /
+ *       | /
+ *       |/
+ *       *  in-gamut start
+ *       +---------------> Lightness
+ * ```
+ *
+ * When the color is already outside the target gamut, the input is
+ * returned unchanged. Expansion only moves inward to outward. Use
+ * `mapToGamut` to move outward to inward.
+ *
+ * @template S - The source color space type.
+ * @template T - The target color space type.
+ *
+ * @param color - The source color.
+ * @param targetSpace - The space to expand into. Defines the boundary.
+ * @param amount - A scale in 0 to 1. Defaults to 1. Zero returns the
+ *   input. One expands to the boundary.
+ * @returns A new `ColorValue<T>`.
+ *
+ * @example
+ * // Take an sRGB red and expand it toward the P3 boundary.
+ * const expanded = expandGamut(make(sRGB, 1, 0, 0), Display_P3);
+ *
+ * @example
+ * // Expand halfway.
+ * const partial = expandGamut(make(sRGB, 1, 0, 0), Display_P3, 0.5);
+ */
+export function expandGamut<S extends ColorSpaceDef<string>, T extends ColorSpaceDef<string>>(
+  color: ColorValue<S>,
+  targetSpace: T,
+  amount = 1,
+): ColorValue<T> {
+  // Convert the source to the target space.
+  const inTarget = convert(color, targetSpace);
+  // If the color is already outside the target gamut, no expansion.
+  if (!isInRange(inTarget)) return inTarget;
+  // No expansion wanted.
+  if (amount <= 0) return inTarget;
+
+  // Work in OKLCh.
+  const lch = convert(color, OKLCh);
+  const L = lch.r;
+  const H = lch.b;
+  const c0 = lch.g;
+
+  // Gray colors have no direction. Return the input.
+  if (c0 < 1e-6) return inTarget;
+
+  // Binary-search the boundary chroma.
+  let lo = c0;
+  let hi = OKLCh.descriptor.channelRanges[1].max;
+  const MAX_ITER = 20;
+  for (let i = 0; i < MAX_ITER; i++) {
+    const mid = (lo + hi) / 2;
+    const probe = make(OKLCh, L, mid, H);
+    const probeIn = convert(probe, targetSpace);
+    if (isInRange(probeIn)) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+
+  // Linearly interpolate between the input chroma and the boundary.
+  const cBoundary = lo;
+  const cNew = c0 + (cBoundary - c0) * Math.min(1, amount);
+  const result = make(OKLCh, L, cNew, H, color.a);
+  return convert(result, targetSpace);
+}

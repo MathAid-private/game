@@ -17,11 +17,13 @@ export * from './accessibility';
 export * from './adaptation';
 export * from './backend';
 export * from './bridge';
+export * from './cam16';
 export * from './composite';
 export * from './convert';
 export * from './difference';
 export * from './gamut-mapping';
 export * from './gradient';
+export * from './icc';
 export * from './mutable';
 export * from './operations';
 export * from './packed';
@@ -29,3 +31,4 @@ export * from './quantize';
 export * from './space';
 export * from './tone-mapping';
 export * from './w3c';
+
