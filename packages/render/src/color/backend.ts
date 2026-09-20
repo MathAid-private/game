@@ -693,24 +693,361 @@ export const WebGPU: BackendAdapter<
 };
 
 // -----------------------------------------------------------------
+//  PlayStation 5 (AGC)
+// -----------------------------------------------------------------
+
+/**
+ * @summary
+ * The PS5 AGC color-space enum constants this library emits.
+ *
+ * @description
+ * Values come from the AGC Gnm API. The exact enum names change
+ * between SDK versions. Verify against your SDK version. The shape
+ * of the mapping is stable.
+ *
+ * @note These are string literals, not real AGC enums. The caller is
+ *   responsible for mapping the string to the SDK enum. This keeps
+ *   the library free of a hard SDK dependency.
+ */
+export type PS5ColorSpace =
+  | 'kColorSpaceSRGB'
+  | 'kColorSpaceLinear'
+  | 'kColorSpaceDisplayP3'
+  | 'kColorSpaceBT2020'
+  | 'kColorSpaceHDR10';
+
+/** @summary The PS5 AGC pixel-format enum constants this library emits. */
+export type PS5PixelFormat =
+  'kB8G8R8A8UNorm' | 'kB8G8R8A8SRGB' | 'kR16G16B16A16Float' | 'kR10G10B10A2UNorm';
+
+/**
+ * @summary
+ * The PS5 AGC clear-color struct.
+ *
+ * @description
+ * Maps to the `Gnm::RenderTarget` clear color. The array order is
+ * R, G, B, A. Values are linear for float targets and encoded for
+ * UNorm targets.
+ */
+export interface PS5ClearColor {
+  /** Clear color as an [R, G, B, A] array. */
+  readonly color: readonly [number, number, number, number];
+  /** The pixel format for the render target. */
+  readonly format: PS5PixelFormat;
+}
+
+/**
+ * @summary
+ * The PS5 AGC surface configuration.
+ *
+ * @description
+ * Drives `sce::Gnm::RenderTarget` and swap-chain setup.
+ */
+export interface PS5Config {
+  /** The color space for the swap chain. */
+  readonly colorSpace: PS5ColorSpace;
+  /** The pixel format for the back buffer. */
+  readonly format: PS5PixelFormat;
+  /** True when the target supports HDR. */
+  readonly hdr: boolean;
+}
+
+/**
+ * @summary
+ * The PlayStation 5 backend adapter.
+ *
+ * @description
+ * PS5 uses the AGC Gnm API. Clear colors are linear for float targets
+ * and encoded for UNorm targets. This adapter always emits linear
+ * values. Pair with a float format for HDR or let the driver encode
+ * for an SRGB format.
+ *
+ * @note The enum strings are placeholders. Map them to the real
+ *   AGC enums in your renderer. Pin the mapping to a specific SDK
+ *   version.
+ */
+export const PS5: BackendAdapter<PS5ColorSpace, PS5PixelFormat, PS5ClearColor, PS5Config> = {
+  colorSpaceEnum(id): PS5ColorSpace {
+    const map: Partial<Record<ColorSpaceId, PS5ColorSpace>> = {
+      sRGB: 'kColorSpaceSRGB',
+      Linear_sRGB: 'kColorSpaceLinear',
+      Display_P3: 'kColorSpaceDisplayP3',
+      Linear_P3: 'kColorSpaceDisplayP3',
+      Linear_Rec2020: 'kColorSpaceBT2020',
+      PQ_Rec2020: 'kColorSpaceHDR10',
+      HLG_Rec2020: 'kColorSpaceBT2020',
+    };
+    const v = map[id];
+    if (!v) throw new Error(`PS5: no color-space mapping for "${id}"`);
+    return v;
+  },
+
+  pixelFormatEnum(id): PS5PixelFormat {
+    const map: Partial<Record<ColorSpaceId, PS5PixelFormat>> = {
+      sRGB: 'kB8G8R8A8SRGB',
+      Linear_sRGB: 'kR16G16B16A16Float',
+      Display_P3: 'kR16G16B16A16Float',
+      Linear_P3: 'kR16G16B16A16Float',
+      Linear_Rec2020: 'kR16G16B16A16Float',
+      PQ_Rec2020: 'kR10G10B10A2UNorm',
+      HLG_Rec2020: 'kR16G16B16A16Float',
+    };
+    return map[id] ?? 'kR16G16B16A16Float';
+  },
+
+  clearColor<S extends ColorSpaceDef<string>>(color: ColorValue<S>): PS5ClearColor {
+    const c = convert(color, Linear_sRGB);
+    const fmt = this.pixelFormatEnum(sRGB.id);
+    return {
+      color: [c.r, c.g, c.b, c.a],
+      format: fmt,
+    };
+  },
+
+  configure(id): PS5Config {
+    const hdr = ['Linear_Rec2020', 'PQ_Rec2020', 'HLG_Rec2020'].includes(id);
+    return {
+      colorSpace: this.colorSpaceEnum(id),
+      format: this.pixelFormatEnum(id),
+      hdr,
+    };
+  },
+};
+
+// -----------------------------------------------------------------
+//  Nintendo Switch (NVN)
+// -----------------------------------------------------------------
+
+/**
+ * @summary
+ * The Switch NVN color-space enum constants this library emits.
+ *
+ * @description
+ * Values come from the NVN API. As with the PS5 adapter, these are
+ * string literals. Map them to the real NVN enums in your renderer.
+ */
+export type NVNColorSpace =
+  | 'NVN_COLOR_SPACE_LINEAR'
+  | 'NVN_COLOR_SPACE_SRGB'
+  | 'NVN_COLOR_SPACE_DISPLAY_P3'
+  | 'NVN_COLOR_SPACE_BT2020';
+
+/** @summary The Switch NVN pixel-format enum constants this library emits. */
+export type NVNFormat =
+  | 'NVN_FORMAT_RGBA8'
+  | 'NVN_FORMAT_RGBA8_SRGB'
+  | 'NVN_FORMAT_RGBA16F'
+  | 'NVN_FORMAT_RGB10_A2'
+  | 'NVN_FORMAT_RGBA32F';
+
+/**
+ * @summary
+ * The Switch NVN clear-color struct.
+ *
+ * @description
+ * Maps to the `NVNcolorData` used by `nvnClearColor`. The array order
+ * is R, G, B, A.
+ */
+export interface NVNClearColor {
+  /** Clear color as an [R, G, B, A] array. */
+  readonly rgba: readonly [number, number, number, number];
+}
+
+/**
+ * @summary
+ * The Switch NVN surface configuration.
+ *
+ * @description
+ * Drives `NVNwindow` and `NVNtexture` setup for the back buffer.
+ */
+export interface NVNConfig {
+  /** The color space for the window. */
+  readonly colorSpace: NVNColorSpace;
+  /** The pixel format for the back buffer. */
+  readonly format: NVNFormat;
+  /** True when the target supports HDR. */
+  readonly hdr: boolean;
+}
+
+/**
+ * @summary
+ * The Nintendo Switch backend adapter.
+ *
+ * @description
+ * Switch uses the NVN API. Clear colors are linear for float formats.
+ * For SRGB formats, the driver applies the EOTF internally.
+ *
+ * @note The enum strings are placeholders. Map them to the real
+ *   NVN enums in your renderer.
+ */
+export const Switch: BackendAdapter<NVNColorSpace, NVNFormat, NVNClearColor, NVNConfig> = {
+  colorSpaceEnum(id): NVNColorSpace {
+    const map: Partial<Record<ColorSpaceId, NVNColorSpace>> = {
+      sRGB: 'NVN_COLOR_SPACE_SRGB',
+      Linear_sRGB: 'NVN_COLOR_SPACE_LINEAR',
+      Display_P3: 'NVN_COLOR_SPACE_DISPLAY_P3',
+      Linear_P3: 'NVN_COLOR_SPACE_DISPLAY_P3',
+      Linear_Rec2020: 'NVN_COLOR_SPACE_BT2020',
+      PQ_Rec2020: 'NVN_COLOR_SPACE_BT2020',
+      HLG_Rec2020: 'NVN_COLOR_SPACE_BT2020',
+    };
+    const v = map[id];
+    if (!v) throw new Error(`Switch: no color-space mapping for "${id}"`);
+    return v;
+  },
+
+  pixelFormatEnum(id): NVNFormat {
+    const map: Partial<Record<ColorSpaceId, NVNFormat>> = {
+      sRGB: 'NVN_FORMAT_RGBA8_SRGB',
+      Linear_sRGB: 'NVN_FORMAT_RGBA16F',
+      Display_P3: 'NVN_FORMAT_RGBA16F',
+      Linear_P3: 'NVN_FORMAT_RGBA16F',
+      Linear_Rec2020: 'NVN_FORMAT_RGBA16F',
+      PQ_Rec2020: 'NVN_FORMAT_RGB10_A2',
+      HLG_Rec2020: 'NVN_FORMAT_RGBA16F',
+    };
+    return map[id] ?? 'NVN_FORMAT_RGBA32F';
+  },
+
+  clearColor<S extends ColorSpaceDef<string>>(color: ColorValue<S>): NVNClearColor {
+    const c = convert(color, Linear_sRGB);
+    return { rgba: [c.r, c.g, c.b, c.a] };
+  },
+
+  configure(id): NVNConfig {
+    const hdr = ['Linear_Rec2020', 'PQ_Rec2020', 'HLG_Rec2020'].includes(id);
+    return {
+      colorSpace: this.colorSpaceEnum(id),
+      format: this.pixelFormatEnum(id),
+      hdr,
+    };
+  },
+};
+
+// -----------------------------------------------------------------
+//  Software reference adapter
+// -----------------------------------------------------------------
+
+/**
+ * @summary
+ * The Software reference adapter.
+ *
+ * @description
+ * The Software adapter does not target a real GPU. It emits an
+ * 8-bit sRGB byte array suitable for tests, debug overlays, and
+ * software rasterizers. It is deterministic. It does not depend on
+ * any driver.
+ *
+ * The adapter does not implement `BackendAdapter`. Its output format
+ * is fixed to 8-bit sRGB. It ignores the color space ID in every
+ * method. This is a deliberate simplification. Use the other adapters
+ * when you need a space-specific mapping.
+ *
+ * @example
+ * const bytes = Software.clearColor(make(sRGB, 1, 0, 0));
+ * // bytes is Uint8ClampedArray [255, 0, 0, 255]
+ */
+export const Software = {
+  /**
+   * @summary
+   * Return the fixed color-space name.
+   *
+   * @description
+   * The Software adapter always uses sRGB. The `id` argument is
+   * accepted for signature compatibility with `BackendAdapter` and
+   * is ignored.
+   *
+   * @param id - The logical color space. Ignored.
+   * @returns The string `'srgb'`.
+   */
+  colorSpaceEnum(_id: ColorSpaceId): 'srgb' {
+    return 'srgb';
+  },
+
+  /**
+   * @summary
+   * Return the fixed pixel-format name.
+   *
+   * @description
+   * The Software adapter always uses 8-bit RGBA. The `id` argument
+   * is accepted for signature compatibility and is ignored.
+   *
+   * @param id - The logical color space. Ignored.
+   * @returns The string `'rgba8unorm'`.
+   */
+  pixelFormatEnum(_id: ColorSpaceId): 'rgba8unorm' {
+    return 'rgba8unorm';
+  },
+
+  /**
+   * @summary
+   * Convert a color to 8-bit sRGB bytes.
+   *
+   * @description
+   * The function converts to sRGB. It clamps each channel to 0 to 1.
+   * It scales by 255 and rounds.
+   *
+   * @template S - The source color space.
+   * @param color - The color to convert.
+   * @returns A 4-element `Uint8ClampedArray` in RGBA order.
+   */
+  clearColor<S extends ColorSpaceDef<string>>(color: ColorValue<S>): Uint8ClampedArray {
+    const c = convert(color, sRGB);
+    const out = new Uint8ClampedArray(4);
+    out[0] = Math.round(Math.max(0, Math.min(1, c.r)) * 255);
+    out[1] = Math.round(Math.max(0, Math.min(1, c.g)) * 255);
+    out[2] = Math.round(Math.max(0, Math.min(1, c.b)) * 255);
+    out[3] = Math.round(Math.max(0, Math.min(1, c.a)) * 255);
+    return out;
+  },
+
+  /**
+   * @summary
+   * Return the fixed surface configuration.
+   *
+   * @description
+   * The Software adapter has no surface. This returns a constant
+   * record. The `id` argument is accepted for signature compatibility
+   * and is ignored.
+   *
+   * @param id - The logical color space. Ignored.
+   * @returns A constant record with `format` and `colorSpace`.
+   */
+  configure(_id?: ColorSpaceId): {
+    readonly format: 'rgba8unorm';
+    readonly colorSpace: 'srgb';
+  } {
+    return { format: 'rgba8unorm', colorSpace: 'srgb' };
+  },
+} as const;
+
+// -----------------------------------------------------------------
 //  Convenience: all backends
 // -----------------------------------------------------------------
 
 /**
  * @summary
- * All five backend adapters, keyed by a short identifier.
+ * All eight backend adapters, keyed by a short identifier.
  *
  * @description
  * The object is frozen with `as const`. The keys are stable. Use the
  * `BackendKey` type for exhaustive switches.
  *
  * @example
- * import { backends, make, sRGB } from './index.js';
+ * import { backends, make, sRGB } from '@games/render';
  *
- * const adapter = backends.DX12;
- * const clear = adapter.clearColor(make(sRGB, 1, 0, 0));
+ * const clear = backends.DX12.clearColor(make(sRGB, 1, 0, 0));
  */
-export const backends = { DX12, Vulkan, Metal, OpenGL, WebGPU } as const;
+export const backends = {
+  DX12,
+  Vulkan,
+  Metal,
+  OpenGL,
+  WebGPU,
+  PS5,
+  Switch,
+  Software,
+} as const;
 
 /**
  * @summary

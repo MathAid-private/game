@@ -12,7 +12,6 @@
  *
  * @author MathAid
  */
-
 export * from './accessibility';
 export * from './adaptation';
 export * from './backend';
@@ -28,7 +27,8 @@ export * from './mutable';
 export * from './operations';
 export * from './packed';
 export * from './quantize';
+export * from './science';
+export * from './shader';
 export * from './space';
 export * from './tone-mapping';
 export * from './w3c';
-

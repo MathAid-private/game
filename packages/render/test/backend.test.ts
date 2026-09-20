@@ -18,11 +18,15 @@ import {
   convert,
   Display_P3,
   DX12,
+  Linear_Rec2020,
   Linear_sRGB,
   make,
   Metal,
   OpenGL,
+  PS5,
+  Software,
   sRGB,
+  Switch,
   Vulkan,
   WebGPU,
 } from '@games/render';
@@ -163,5 +167,76 @@ describe('WebGPU adapter', () => {
     expect(out).toHaveProperty('g');
     expect(out).toHaveProperty('b');
     expect(out).toHaveProperty('a');
+  });
+});
+
+describe('backends object', () => {
+  it('contains all eight adapters', () => {
+    expect(Object.keys(backends).sort()).toEqual(
+      ['DX12', 'Metal', 'OpenGL', 'PS5', 'Software', 'Switch', 'Vulkan', 'WebGPU'].sort(),
+    );
+  });
+});
+
+describe('PS5 adapter', () => {
+  it('maps sRGB', () => {
+    expect(PS5.colorSpaceEnum('sRGB')).toBe('kColorSpaceSRGB');
+  });
+
+  it('clearColor emits a 4-tuple', () => {
+    const out = PS5.clearColor(make(sRGB, 1, 0, 0));
+    expect(out.color).toHaveLength(4);
+    expect(out.format).toBe('kB8G8R8A8SRGB');
+  });
+
+  it('configure sets hdr for PQ', () => {
+    expect(PS5.configure('PQ_Rec2020').hdr).toBe(true);
+    expect(PS5.configure('sRGB').hdr).toBe(false);
+  });
+
+  it('throws on unknown space', () => {
+    expect(() => PS5.colorSpaceEnum('XYZ_D65' as never)).toThrow(/PS5/);
+  });
+});
+
+describe('Switch adapter', () => {
+  it('maps sRGB', () => {
+    expect(Switch.colorSpaceEnum('sRGB')).toBe('NVN_COLOR_SPACE_SRGB');
+  });
+
+  it('clearColor emits a 4-tuple', () => {
+    const out = Switch.clearColor(make(Display_P3, 0, 0.9, 0.5));
+    expect(out.rgba).toHaveLength(4);
+  });
+
+  it('configure sets hdr for PQ', () => {
+    expect(Switch.configure('PQ_Rec2020').hdr).toBe(true);
+  });
+});
+
+describe('Software adapter', () => {
+  it('emits 8-bit sRGB bytes', () => {
+    const out = Software.clearColor(make(sRGB, 1, 0, 0));
+    expect(Array.from(out)).toEqual([255, 0, 0, 255]);
+  });
+
+  it('clamps out-of-range values', () => {
+    const out = Software.clearColor(make(Linear_Rec2020, 2, -1, 0.5));
+    expect(out[0]).toBe(255);
+    expect(out[1]).toBe(0);
+  });
+
+  it('configure returns the fixed format and space', () => {
+    const c = Software.configure('sRGB');
+    expect(c.format).toBe('rgba8unorm');
+    expect(c.colorSpace).toBe('srgb');
+  });
+
+  it('configure ignores the id argument', () => {
+    const a = Software.configure();
+    const b = Software.configure('sRGB');
+    const c = Software.configure('Display_P3');
+    expect(a).toEqual(b);
+    expect(b).toEqual(c);
   });
 });
