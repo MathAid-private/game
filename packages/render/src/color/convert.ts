@@ -1089,3 +1089,21 @@ export function withAlpha<S extends ColorSpaceDef<string>>(
 ): ColorValue<S> {
   return make(color._space, color.r, color.g, color.b, a);
 }
+
+/**
+ * @summary
+ * Internal helpers for performance-sensitive modules.
+ *
+ * @description
+ * This object exposes the private `toXYZ` and `fromXYZ` helpers. It
+ * exists so that `wasm/fallback.ts` can hoist the matrix lookups out
+ * of a hot loop. Do not use these helpers in application code. Use
+ * `convert` instead.
+ *
+ * @internal
+ * @private
+ */
+export const _internal = {
+  toXYZ,
+  fromXYZ,
+};

@@ -791,6 +791,33 @@ dither(pixels, 320, 240, { mode: 'floyd-steinberg' });
   none              Quantize without dithering.
 ```
 
+## Serialization
+```ts
+// Encode a large palette to a file on Node.
+import { createWriteStream } from 'node:fs';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { packPalette, toMsgPackStream, make, sRGB } from '@games/render';
+
+const palette = packPalette(
+  Array.from({ length: 100_000 }, (_, i) =>
+    make(sRGB, i / 100_000, 1 - i / 100_000, 0.5),
+  ),
+);
+
+await pipeline(
+  Readable.from(toMsgPackStream(palette, { chunkSize: 128 * 1024 })),
+  createWriteStream('huge-palette.msgpack'),
+);
+
+// Decode from a file.
+import { createReadStream } from 'node:fs';
+import { fromMsgPackStream, unpackPalette } from '@games/render';
+
+const data = await fromMsgPackStream(createReadStream('huge-palette.msgpack'));
+const colors = unpackPalette(data);
+```
+
 ## Building your own space
 
 The library supports custom spaces. Use `makeSpace` with a full
