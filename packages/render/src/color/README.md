@@ -1,8 +1,10 @@
-The color module of `@games/render`. It sits at `packages/render/src/color`.
-It abstracts color for the rendering pipeline. Application code works
-with logical color spaces. The module handles conversion, gamut
-mapping, color operations, gradients, and the per-backend encoding
-that each graphics API expects.
+# `@games/render/color`
+
+The color module of `@games/render`. It sits at
+`packages/render/src/color`. It abstracts color for the rendering
+pipeline. Application code works with logical color spaces. The module
+handles conversion, gamut mapping, color operations, gradients, and
+the per-backend encoding that each graphics API expects.
 
 ## Why this module exists
 
@@ -20,6 +22,7 @@ adapter states what it expects.
 
 - [What the module gives you](#what-the-module-gives-you)
 - [Quick start](#quick-start)
+- [Import conventions](#import-conventions)
 - [Module map](#module-map)
 - [Core concepts](#core-concepts)
 - [Color spaces](#color-spaces)
@@ -37,6 +40,13 @@ adapter states what it expects.
 - [Tone mapping](#tone-mapping)
 - [Chromatic adaptation](#chromatic-adaptation)
 - [Quantization and dithering](#quantization-and-dithering)
+- [CAM16 appearance model](#cam16-appearance-model)
+- [ICC profile reader](#icc-profile-reader)
+- [Color science helpers](#color-science-helpers)
+- [Shader snippet generation](#shader-snippet-generation)
+- [Serialization](#serialization)
+- [Fast batch conversion](#fast-batch-conversion)
+- [Development tools](#development-tools)
 - [Building your own space](#building-your-own-space)
 - [Design rules](#design-rules)
 - [Known limits](#known-limits)
@@ -45,12 +55,14 @@ adapter states what it expects.
 ## What the module gives you
 
 - A phantom-typed `ColorValue<S>` for compile-time space tracking.
-- Twenty-two built-in color spaces. SDR, HDR, wide gamut, perceptual,
-  cylindrical, video, log, and film.
+- A `ColorTuple<S>` view for GPU boundaries and structured data.
+- Twenty-four built-in color spaces. SDR, HDR, wide gamut,
+  perceptual, cylindrical, video, log, and film.
 - A pure `convert()` function that routes through CIE XYZ D65.
-- A CSS Color 4 gamut mapping algorithm in OKLCh.
-- Five backend adapters that emit the correct enums and structs for
-  DX12, Vulkan, Metal, OpenGL, and WebGPU.
+- A CSS Color 4 gamut mapping algorithm in OKLCh. Plus gamut
+  expansion.
+- Eight backend adapters. DX12, Vulkan, Metal, OpenGL, WebGPU, PS5,
+  Switch, and a software reference.
 - Color operations. Lighten, darken, saturate, rotate hue, invert.
 - Alpha compositing. Porter-Duff `over` and `under`.
 - A `MutableColor<S>` variant for hot loops.
@@ -63,6 +75,14 @@ adapter states what it expects.
 - HDR tone mapping. Reinhard, ACES filmic, AgX, and exposure.
 - Chromatic adaptation. Bradford, Von Kries, CAT02, and XYZ scaling.
 - Quantization and dithering. Bayer and Floyd-Steinberg.
+- A CAM16 color appearance model.
+- An ICC profile reader for matrix and TRC profiles.
+- Color science helpers. Chromaticity, dominant wavelength,
+  temperature, metamer check.
+- A shader constant generator. HLSL, GLSL, WGSL, and MSL.
+- JSON and MessagePack serialization, with a streaming decoder.
+- A fast batch conversion path with a WASM stub.
+- Development diagnostics. Gamut warnings and debug formatting.
 
 ## Quick start
 
@@ -101,8 +121,9 @@ const composited = over(hover, backdrop);
 const clear = DX12.clearColor(composited);
 ```
 
-Import every symbol from `@games/render`. Do not import from a file
-path. The package barrel re-exports everything.
+## Import conventions
+
+The rule depends on where the code lives.
 
 ```ts
 // Application code and tests. Import from the package barrel.
@@ -119,15 +140,13 @@ import { sRGB } from './space';
 import { make } from '@games/render/src/color/convert';
 ```
 
-The Vitest config in the monorepo root maps `@games/render` to
-`packages/render/src/index.ts`. Tests run against source with no build
-step.
+Tests live at `packages/render/test`. They are outside `src`. So
+tests use `@games/render`. Source files inside `src/color/` use
+relative paths to each other.
 
-The package barrel at `packages/render/src/index.ts` re-exports
-every file in this directory. Application code and tests import
-from `@games/render`. Source files inside `src/color/` import
-each other with relative paths. Deep imports from a file path
-are not supported.
+The Vitest config maps `@games/render` to
+`packages/render/src/index.ts`. Tests run against source with no
+build step.
 
 ## Module map
 
@@ -136,10 +155,12 @@ are not supported.
     src/
       index.ts             Package barrel. Re-exports color and render.
       color/
+        index.ts           Color barrel. Re-exports every file.
         space.ts           Space definitions and descriptors.
-        convert.ts         ColorValue, make, convert, and helpers.
-        gamut-mapping.ts   Gamut checking and chroma reduction.
-        backend.ts         Backend adapters for five graphics APIs.
+        convert.ts         ColorValue, ColorTuple, make, convert.
+        tuple.ts           Re-exports the tuple helpers.
+        gamut-mapping.ts   checkGamut, mapToGamut, expandGamut.
+        backend.ts         Eight backend adapters.
         mutable.ts         MutableColor and converters.
         accessibility.ts   Luminance, contrast, readable text.
         difference.ts      Delta-E metrics.
@@ -150,7 +171,10 @@ are not supported.
         tone-mapping.ts    HDR tone mapping.
         adaptation.ts      Chromatic adaptation.
         quantize.ts        Quantization and dithering.
-        index.ts           Color barrel. Re-exports every file.
+        cam16.ts           CAM16 forward and reverse.
+        science.ts         Chromaticity, wavelength, temperature.
+        shader.ts          Shader constant generation.
+        debug.ts           Development diagnostics.
         gradient/
           index.ts         Gradient barrel.
           types.ts         GradientStop, Point2D, sampleStops.
@@ -163,12 +187,29 @@ are not supported.
           index.ts         W3C barrel.
           css.ts           fromCSS, toCSS, CSSFormat.
           css-named.ts     CSS_NAMED_COLORS.
+        icc/
+          index.ts         ICC barrel.
+          profile.ts       ICCProfile and TRCFunction types.
+          parser.ts        parseICC.
+          transforms.ts    applyProfile and toProfileSpace.
+        serialize/
+          index.ts         Serialize barrel.
+          types.ts         Serializable, Palette, SerializedGradient.
+          palette.ts       packPalette, unpackPalette, packColor.
+          gradient.ts      packGradient, unpackGradient.
+          json.ts          toJSON, fromJSON.
+          msgpack.ts       toMsgPack, fromMsgPack, and streams.
+        wasm/
+          index.ts         convertBatchSIMD.
+          fallback.ts      convertBatchFast.
 
     test/                  Tests for the package, not under src.
       space.test.ts
       convert.test.ts
       convert-spaces.test.ts
+      tuple.test.ts
       gamut-mapping.test.ts
+      gamut-expansion.test.ts
       backend.test.ts
       mutable.test.ts
       accessibility.test.ts
@@ -181,8 +222,16 @@ are not supported.
       css.test.ts
       tone-mapping.test.ts
       log-spaces.test.ts
+      jzazbz.test.ts
       adaptation.test.ts
       quantize.test.ts
+      cam16.test.ts
+      icc.test.ts
+      science.test.ts
+      shader.test.ts
+      serialize.test.ts
+      wasm.test.ts
+      debug.test.ts
 ```
 
 Tests live at `packages/render/test`. Source lives at
@@ -199,10 +248,10 @@ phantom space tag.
 
 ```ts
 interface ColorValue<S extends ColorSpaceDef<string>> {
-  readonly r: number;
-  readonly g: number;
-  readonly b: number;
-  readonly a: number;
+  readonly c1: number;
+  readonly c2: number;
+  readonly c3: number;
+  readonly alpha: number;
   readonly _space: S;
 }
 ```
@@ -212,20 +261,68 @@ The `S` parameter is a color space object. It is `typeof sRGB`,
 extra runtime cost. TypeScript uses it to stop cross-space mistakes.
 
 ```ts
-  make(sRGB, 0.5, 0.5, 0.5) //  -->  ColorValue<typeof sRGB>
-  make(Linear_sRGB, 0.5, 0.5, 0.5) // -->  ColorValue<typeof Linear_sRGB>
+make(sRGB, 0.5, 0.5, 0.5); // ColorValue<typeof sRGB>
+make(Linear_sRGB, 0.5, 0.5, 0.5); // ColorValue<typeof Linear_sRGB>
 
-  const linear: ColorValue<typeof Linear_sRGB> = make(sRGB, 0.5, 0.5, 0.5);
-  //    Type error. sRGB is not assignable to Linear_sRGB.
+const linear: ColorValue<typeof Linear_sRGB> = make(sRGB, 0.5, 0.5, 0.5);
+//    Type error. sRGB is not assignable to Linear_sRGB.
 ```
+
+The field names are honest. `c1` is the first channel. It is not
+always red. `alpha` is always the transparency. `_space` carries the
+runtime tag.
+
+### The `ColorTuple<S>` view
+
+A `ColorTuple<S>` is a readonly 4-tuple. It is a view for GPU
+boundaries, JSON, and structured data. It is not the canonical
+representation.
+
+```ts
+type ColorTuple<S extends ColorSpaceDef<string>> = readonly [
+  c1: number,
+  c2: number,
+  c3: number,
+  alpha: number,
+] & { readonly [colorTupleBrand]?: S };
+```
+
+The brand is type-only. It has no runtime presence. The tuple does
+not survive `[...c]`, `c.slice()`, `structuredClone(c)`, or a JSON
+round-trip with the space tag intact. Use `fromTuple(tuple, space)`
+to attach the space when you need a `ColorValue`.
+
+```ts
+import { asTuple, fromTuple, makeTuple, sRGB, Linear_sRGB } from '@games/render';
+
+const t = makeTuple(sRGB, 1, 0, 0); // [1, 0, 0, 1]
+const c = fromTuple(t, sRGB); // ColorValue<typeof sRGB>
+const back = asTuple(c); // [1, 0, 0, 1]
+```
+
+Three functions accept a tuple in addition to a `ColorValue`:
+`convert`, `mapToGamut`, and `checkGamut`. Every tuple that enters
+one of them is converted to a `ColorValue` at the top of the
+function. The conversion exists for three reasons.
+
+1. The object carries the `_space` field. The tuple cannot. The
+   function reads `_space` to know the source space.
+2. TypeScript's structural typing and type predicates are reliable
+   on objects. A tuple loses the space tag on any array copy. The
+   object loses nothing.
+3. A tuple-based tag would need a global `WeakMap<tuple, space>`.
+   That map is a leak risk and a performance cost. The object shape
+   avoids it entirely.
+
+The tuple is a view. The object is the canonical form.
 
 ### The three-channel layout
 
-The field names are always `r`, `g`, `b`. Their meaning depends on the
-space.
+The field names are always `c1`, `c2`, `c3`. Their meaning depends
+on the space.
 
 ```text
-  Space       r       g       b
+  Space       c1      c2      c3
   -----       --      --      --
   sRGB        R       G       B
   OKLab       L       a       b
@@ -234,15 +331,16 @@ space.
   HSL         H       S       L
   YCbCr       Y       Cb      Cr
   ICtCp       I       Ct      Cp
+  Jzazbz      Jz      az      bz
 ```
 
 Read `color._space.descriptor.channelNames` when you need the labels.
-Do not assume `r` is always red.
+Do not assume `c1` is always red.
 
 ### Channel ranges
 
 Each space declares one range per channel in
-`descriptor.channelRanges`. The layout is `[rangeR, rangeG, rangeB]`.
+`descriptor.channelRanges`. The layout is `[rangeC1, rangeC2, rangeC3]`.
 
 ```text
   sRGB:     [ {0,1},   {0,1},   {0,1}   ]
@@ -252,59 +350,61 @@ Each space declares one range per channel in
   HSL:      [ {-Inf,+Inf}, {0,1}, {0,1}   ]
 ```
 
-The `isInRange` and `clampToRange` helpers read these ranges. They do
-not guess.
+The `isInRange` and `clampToRange` helpers read these ranges. They
+do not guess.
 
 ## Color spaces
 
-Twenty-two spaces ship with the library.
+Twenty-four spaces ship with the library.
 
 ### SDR and wide gamut
 
-| Space | Purpose |
-|-------|---------|
-| `sRGB` | The default SDR space for the web. |
-| `Linear_sRGB` | sRGB primaries, no curve. Use for lighting. |
-| `Display_P3` | Wide-gamut SDR. Apple displays and many phones. |
-| `Linear_P3` | Linear P3. Use for wide-gamut shader inputs. |
+| Space         | Purpose                                         |
+| ------------- | ----------------------------------------------- |
+| `sRGB`        | The default SDR space for the web.              |
+| `Linear_sRGB` | sRGB primaries, no curve. Use for lighting.     |
+| `Display_P3`  | Wide-gamut SDR. Apple displays and many phones. |
+| `Linear_P3`   | Linear P3. Use for wide-gamut shader inputs.    |
 
 ### HDR
 
-| Space | Purpose |
-|-------|---------|
+| Space            | Purpose                                  |
+| ---------------- | ---------------------------------------- |
 | `Linear_Rec2020` | Linear BT.2020. The HDR container space. |
-| `PQ_Rec2020` | ST.2084 PQ. HDR10 and Dolby Vision. |
-| `HLG_Rec2020` | BT.2100 HLG. Live HDR broadcast. |
+| `PQ_Rec2020`     | ST.2084 PQ. HDR10 and Dolby Vision.      |
+| `HLG_Rec2020`    | BT.2100 HLG. Live HDR broadcast.         |
 
 ### ACES and film
 
-| Space | Purpose |
-|-------|---------|
+| Space      | Purpose                                               |
+| ---------- | ----------------------------------------------------- |
 | `ACES_AP0` | The ACES archival space. Covers the visible spectrum. |
-| `ACES_AP1` | ACEScg. The working space for ACES rendering. |
-| `ACEScct` | ACES log with a toe. True black. Grading. |
-| `ACEScc` | Pure ACES log. Continuous curve. |
-| `LogC3` | ARRI LogC3 at EI 800. ALEXA footage. |
+| `ACES_AP1` | ACEScg. The working space for ACES rendering.         |
+| `ACEScct`  | ACES log with a toe. True black. Grading.             |
+| `ACEScc`   | Pure ACES log. Continuous curve.                      |
+| `LogC3`    | ARRI LogC3 at EI 800. ALEXA footage.                  |
 
 ### Perceptual and interchange
 
-| Space | Purpose |
-|-------|---------|
-| `XYZ_D65` | CIE XYZ with D65 white. The interchange space. |
-| `OKLab` | Perceptually uniform. Best for blending. |
-| `OKLCh` | The polar form of OKLab. Best for chroma reduction. |
-| `CIE_Lab` | CIE 1976 Lab. Older perceptual space. |
-| `CIE_LCh` | The polar form of CIE Lab. |
-| `ICtCp` | Dolby ICtCp. HDR perceptual space. |
+| Space     | Purpose                                             |
+| --------- | --------------------------------------------------- |
+| `XYZ_D65` | CIE XYZ with D65 white. The interchange space.      |
+| `OKLab`   | Perceptually uniform. Best for blending.            |
+| `OKLCh`   | The polar form of OKLab. Best for chroma reduction. |
+| `CIE_Lab` | CIE 1976 Lab. Older perceptual space.               |
+| `CIE_LCh` | The polar form of CIE Lab.                          |
+| `ICtCp`   | Dolby ICtCp. HDR perceptual space.                  |
+| `Jzazbz`  | Safdar 2017. HDR perceptual space.                  |
+| `JzCzHz`  | The polar form of Jzazbz.                           |
 
 ### Cylindrical and video
 
-| Space | Purpose |
-|-------|---------|
-| `HSL` | Hue, saturation, lightness. Tooling and CSS. |
-| `HSV` | Hue, saturation, value. Color pickers. |
-| `HWB` | Hue, whiteness, blackness. CSS interop. |
-| `YCbCr` | ITU-R BT.709 luma and chroma. Video. |
+| Space   | Purpose                                      |
+| ------- | -------------------------------------------- |
+| `HSL`   | Hue, saturation, lightness. Tooling and CSS. |
+| `HSV`   | Hue, saturation, value. Color pickers.       |
+| `HWB`   | Hue, whiteness, blackness. CSS interop.      |
+| `YCbCr` | ITU-R BT.709 luma and chroma. Video.         |
 
 ### The three families
 
@@ -318,7 +418,8 @@ Spaces fall into three groups.
 
   Cube-root LMS:      OKLab, OKLCh
 
-  Special cases:      HSL, HSV, HWB, CIE_Lab, CIE_LCh, YCbCr, ICtCp
+  Special cases:      HSL, HSV, HWB, CIE_Lab, CIE_LCh, YCbCr,
+                      ICtCp, Jzazbz, JzCzHz
 ```
 
 Matrix spaces declare `toXYZ` and `fromXYZ` matrices. The engine
@@ -328,8 +429,9 @@ Cube-root LMS spaces use two matrices with a cube root between them.
 The cube root cannot fold into a matrix.
 
 Special-case spaces use their own math. HSL and HSV use hue sector
-functions. CIE Lab uses a piecewise f-function. ICtCp uses PQ. The
-engine wires these into `toXYZ` and `fromXYZ` in `convert.ts`.
+functions. CIE Lab uses a piecewise f-function. ICtCp and Jzazbz
+use a PQ-like curve. The engine wires these into `toXYZ` and
+`fromXYZ` in `convert.ts`.
 
 Application code does not need to know which family a space belongs
 to. The `convert` function handles all three.
@@ -345,13 +447,15 @@ Every conversion routes through CIE XYZ D65.
   dest linear     -->  [OETF]  -->  dest encoded
 ```
 
-OKLab and OKLCh skip the matrix steps. They use a cube-root LMS path.
-The special-case spaces use their own math on both sides.
+OKLab, OKLCh, ICtCp, Jzazbz, and JzCzHz skip the matrix steps. They
+use their own paths. The cylindrical and Lab spaces use their own
+math on both sides.
 
 The public API is one function.
 
 ```ts
-convert(color, targetSpace)  // ColorValue<Src> -> ColorValue<Dst>
+convert(color, targetSpace); // ColorValue<Src> -> ColorValue<Dst>
+convert(tuple, from, targetSpace); // ColorTuple<Src> -> ColorValue<Dst>
 ```
 
 The function is pure. It returns a new value. It copies alpha
@@ -364,7 +468,7 @@ import { make, convert, sRGB, Linear_sRGB, OKLab } from '@games/render';
 const red = make(sRGB, 1, 0, 0);
 const lab = convert(red, OKLab);
 const back = convert(lab, sRGB);
-// back.r is approximately 1.
+// back.c1 is approximately 1.
 ```
 
 ## Gamut mapping
@@ -409,18 +513,30 @@ if (!r.inGamut) {
 Use `checkGamutAll` to test many spaces at once.
 
 ```ts
-import {
-  checkGamutAll,
-  Display_P3,
-  Linear_Rec2020,
-  make,
-  sRGB,
-} from '@games/render';
+import { checkGamutAll, Display_P3, Linear_Rec2020, make, sRGB } from '@games/render';
 
 const wide = make(Display_P3, 0, 0.9, 0.5);
 const checks = checkGamutAll(wide, [sRGB, Display_P3, Linear_Rec2020]);
-console.log(checks.sRGB.inGamut);  // false
+console.log(checks.sRGB.inGamut); // false
 ```
+
+### Gamut expansion
+
+`expandGamut` is the inverse of `mapToGamut`. It pushes the chroma
+of an in-gamut color toward the target boundary. The hue and
+lightness stay the same.
+
+```ts
+import { expandGamut, make, sRGB, Display_P3 } from '@games/render';
+
+const red = make(sRGB, 1, 0, 0);
+const wider = expandGamut(red, Display_P3);
+const half = expandGamut(red, Display_P3, 0.5);
+```
+
+The result is in the target space. It is not in the source space.
+The `amount` argument scales between the input chroma and the
+boundary. Grays are returned unchanged.
 
 ## Backend adapters
 
@@ -443,18 +559,21 @@ Each adapter exposes four methods.
   configure(id)         A surface or swap-chain configuration record.
 ```
 
-The adapters are plain objects. There are no classes. Tree-shakers can
-drop the backends you do not use.
+The adapters are plain objects. There are no classes. Tree-shakers
+can drop the backends you do not use.
 
 ### What each adapter expects
 
-| Adapter | Clear-color space | Notes |
-|---------|------------------|-------|
-| `DX12` | Linear | Pair with an `_UNORM_SRGB` back buffer. Let the driver encode. |
-| `Vulkan` | Linear | Requires `VK_KHR_swapchain` and `VK_EXT_swapchain_colorspace`. |
-| `Metal` | Linear | Enable extended dynamic range for HDR spaces. |
-| `OpenGL` | Linear | Enable `GL_FRAMEBUFFER_SRGB` to match the shader path. |
-| `WebGPU` | sRGB encoded | Canvas spaces are limited to `srgb` and `display-p3`. |
+| Adapter    | Clear-color space | Notes                                                          |
+| ---------- | ----------------- | -------------------------------------------------------------- |
+| `DX12`     | Linear            | Pair with an `_UNORM_SRGB` back buffer. Let the driver encode. |
+| `Vulkan`   | Linear            | Requires `VK_KHR_swapchain` and `VK_EXT_swapchain_colorspace`. |
+| `Metal`    | Linear            | Enable extended dynamic range for HDR spaces.                  |
+| `OpenGL`   | Linear            | Enable `GL_FRAMEBUFFER_SRGB` to match the shader path.         |
+| `WebGPU`   | sRGB encoded      | Canvas spaces are limited to `srgb` and `display-p3`.          |
+| `PS5`      | Linear            | AGC enums. Map string literals to your SDK.                    |
+| `Switch`   | Linear            | NVN enums. Map string literals to your SDK.                    |
+| `Software` | sRGB encoded      | Emits 8-bit RGBA bytes. Deterministic.                         |
 
 Access the adapters by name or through the `backends` object.
 
@@ -463,6 +582,26 @@ import { backends, DX12, make, sRGB } from '@games/render';
 
 const a = DX12.clearColor(make(sRGB, 1, 0, 0));
 const b = backends.DX12.clearColor(make(sRGB, 1, 0, 0));
+```
+
+### Console adapters
+
+`PS5` and `Switch` emit string literals for the color-space and
+pixel-format enums. The strings match the SDK naming. The caller is
+responsible for mapping a string to the SDK enum. This keeps the
+library free of an SDK dependency.
+
+### Software adapter
+
+`Software` is a reference adapter. It emits an 8-bit sRGB byte
+array. It has no surface and no GPU dependency. It is useful for
+tests, debug overlays, and software rasterizers.
+
+```ts
+import { make, sRGB, Software } from '@games/render';
+
+const bytes = Software.clearColor(make(sRGB, 1, 0, 0));
+// Uint8ClampedArray [255, 0, 0, 255]
 ```
 
 ### Vulkan pass-through
@@ -482,12 +621,12 @@ import { lighten, darken, saturate, rotateHue, complement } from '@games/render'
 
 const red = make(sRGB, 1, 0, 0);
 
-lighten(red, 0.1);        // brighter
-darken(red, 0.1);         // darker
-saturate(red, 0.05);      // more chroma
-desaturate(red, 0.1);     // less chroma
-rotateHue(red, 180);      // complement
-complement(red);          // same as rotateHue(red, 180)
+lighten(red, 0.1); // brighter
+darken(red, 0.1); // darker
+saturate(red, 0.05); // more chroma
+desaturate(red, 0.1); // less chroma
+rotateHue(red, 180); // complement
+complement(red); // same as rotateHue(red, 180)
 ```
 
 `invert` and `grayscale` return the source space. The others return
@@ -503,14 +642,15 @@ import { make, over, under, premultiply, unpremultiply, sRGB } from '@games/rend
 const red = make(sRGB, 1, 0, 0, 0.5);
 const blue = make(sRGB, 0, 0, 1, 1);
 
-over(red, blue);              // red on top of blue
-under(red, blue);             // red under blue
-premultiply(red);             // r *= a
-unpremultiply(red);           // r /= a
+over(red, blue); // red on top of blue
+under(red, blue); // red under blue
+premultiply(red); // c1 *= alpha
+unpremultiply(red); // c1 /= alpha
 ```
 
-Use `over` for the common case. Use `premultiply` before a GPU texture
-upload. Use `unpremultiply` after reading a premultiplied image.
+Use `over` for the common case. Use `premultiply` before a GPU
+texture upload. Use `unpremultiply` after reading a premultiplied
+image.
 
 ## Mutable color
 
@@ -525,12 +665,12 @@ import { make, sRGB, toImmutable, toMutable } from '@games/render';
 
 const src = make(sRGB, 0.5, 0.5, 0.5);
 const m = toMutable(src);
-m.r = 1;
-// src.r is still 0.5
+m.c1 = 1;
+// src.c1 is still 0.5
 
 const snap = toImmutable(m);
-m.g = 0;
-// snap.g is still 0.5
+m.c2 = 0;
+// snap.c2 is still 0.5
 ```
 
 Use this type only where profiling shows a cost. Keep the immutable
@@ -546,10 +686,10 @@ import { contrast, isLight, make, readableTextOn, sRGB, luminance } from '@games
 const white = make(sRGB, 1, 1, 1);
 const black = make(sRGB, 0, 0, 0);
 
-luminance(white);        // 1
-contrast(white, black);  // 21
-isLight(white);          // true
-readableTextOn(white);   // black
+luminance(white); // 1
+contrast(white, black); // 21
+isLight(white); // true
+readableTextOn(white); // black
 ```
 
 WCAG thresholds.
@@ -570,10 +710,10 @@ import { deltaE2000, deltaE76, deltaEITP, deltaEOK, make, sRGB } from '@games/re
 const a = make(sRGB, 1, 0, 0);
 const b = make(sRGB, 0.9, 0.1, 0);
 
-deltaEOK(a, b);      // OKLab distance. CSS Color 4 uses 0.02 as tolerance.
-deltaE2000(a, b);    // CIEDE2000. Most accurate for small differences.
-deltaE76(a, b);      // CIE Lab Euclidean. Legacy compatibility.
-deltaEITP(a, b);     // ICtCp. Designed for HDR content.
+deltaEOK(a, b); // OKLab distance. CSS Color 4 uses 0.02 as tolerance.
+deltaE2000(a, b); // CIEDE2000. Most accurate for small differences.
+deltaE76(a, b); // CIE Lab Euclidean. Legacy compatibility.
+deltaEITP(a, b); // ICtCp. Designed for HDR content.
 ```
 
 Use `deltaEOK` for gamut mapping and for real-time checks. Use
@@ -586,8 +726,13 @@ The `gradient` directory provides four kinds.
 
 ```ts
 import {
-  make, sampleLinear, sampleRadial, sampleMultiStop, samplePattern,
-  sRGB, type LinearGradient,
+  make,
+  sampleLinear,
+  sampleRadial,
+  sampleMultiStop,
+  samplePattern,
+  sRGB,
+  type LinearGradient,
 } from '@games/render';
 
 const g: LinearGradient<typeof sRGB> = {
@@ -601,7 +746,7 @@ const g: LinearGradient<typeof sRGB> = {
   workingSpace: sRGB,
 };
 
-sampleLinear(g, { x: 0.5, y: 0 });  // midway
+sampleLinear(g, { x: 0.5, y: 0 }); // midway
 ```
 
 ### Gradient kinds
@@ -625,22 +770,28 @@ sampleLinear(g, { x: 0.5, y: 0 });  // midway
   +----+                      +----+
 ```
 
-The default working space for interpolation is OKLab. Pass a different
-space when you want a different look.
+The default working space for interpolation is OKLab. Pass a
+different space when you want a different look.
 
 ## Typed arrays and packed formats
 
-The `bridge` module moves colors between objects and typed arrays. The
-`packed` module writes colors to single integers.
+The `bridge` module moves colors between objects and typed arrays.
+The `packed` module writes colors to single integers.
 
 ```ts
 import {
-  make, sRGB,
-  toFloat32Array, fromFloat32Array,
-  toUint8Array, fromUint8Array,
-  toRGBA8, fromRGBA8,
-  toRgb565, fromRgb565,
-  convertBatch, Linear_sRGB,
+  make,
+  sRGB,
+  toFloat32Array,
+  fromFloat32Array,
+  toUint8Array,
+  fromUint8Array,
+  toRGBA8,
+  fromRGBA8,
+  toRgb565,
+  fromRgb565,
+  convertBatch,
+  Linear_sRGB,
 } from '@games/render';
 
 const colors = [make(sRGB, 1, 0, 0), make(sRGB, 0, 0, 1)];
@@ -653,8 +804,8 @@ const back = fromFloat32Array(floats, sRGB);
 const bytes = toUint8Array(colors);
 
 // Single integers.
-const rgba = toRGBA8(make(sRGB, 1, 0, 0, 1));  // 0xff0000ff
-const r565 = toRgb565(make(sRGB, 1, 0, 0));    // 0xf800
+const rgba = toRGBA8(make(sRGB, 1, 0, 0, 1)); // 0xff0000ff
+const r565 = toRgb565(make(sRGB, 1, 0, 0)); // 0xf800
 
 // Batch conversion.
 const linear = convertBatch(colors, Linear_sRGB);
@@ -669,15 +820,15 @@ The `w3c` directory provides CSS Color 4 parsing and serialization.
 ```ts
 import { fromCSS, toCSS } from '@games/render';
 
-fromCSS('#f80');                        // sRGB
-fromCSS('rgb(255 128 0)');              // sRGB
-fromCSS('hsl(30 100% 50%)');            // sRGB
-fromCSS('oklch(0.7 0.15 60)');          // OKLCh
-fromCSS('color(display-p3 1 0.5 0)');   // Display P3
-fromCSS('rebeccapurple');               // sRGB
+fromCSS('#f80'); // sRGB
+fromCSS('rgb(255 128 0)'); // sRGB
+fromCSS('hsl(30 100% 50%)'); // sRGB
+fromCSS('oklch(0.7 0.15 60)'); // OKLCh
+fromCSS('color(display-p3 1 0.5 0)'); // Display P3
+fromCSS('rebeccapurple'); // sRGB
 
-toCSS(make(sRGB, 1, 0, 0));                    // "#ff0000"
-toCSS(make(sRGB, 1, 0, 0, 0.5), 'rgb');        // "rgb(255 0 0 / 0.5)"
+toCSS(make(sRGB, 1, 0, 0)); // "#ff0000"
+toCSS(make(sRGB, 1, 0, 0, 0.5), 'rgb'); // "rgb(255 0 0 / 0.5)"
 toCSS(make(Display_P3, 1, 0.5, 0), 'color-display-p3');
 ```
 
@@ -733,12 +884,12 @@ import { adapt, make, sRGB, whitePointXYZ } from '@games/render';
 
 const red = make(sRGB, 1, 0, 0);
 
-adapt(red, 'D65', 'D50');                 // Bradford by default
-adapt(red, 'D65', 'D50', 'cat02');        // Or CAT02
-adapt(red, 'D65', 'D50', 'von-kries');    // Or Von Kries
-adapt(red, 'D65', 'D50', 'xyz-scaling');  // Or a naive scale
+adapt(red, 'D65', 'D50'); // Bradford by default
+adapt(red, 'D65', 'D50', 'cat02'); // Or CAT02
+adapt(red, 'D65', 'D50', 'von-kries'); // Or Von Kries
+adapt(red, 'D65', 'D50', 'xyz-scaling'); // Or a naive scale
 
-whitePointXYZ('D65');  // [0.95047, 1.0, 1.08883]
+whitePointXYZ('D65'); // [0.95047, 1.0, 1.08883]
 ```
 
 ### Methods
@@ -764,8 +915,8 @@ spreads the error across neighboring pixels.
 ```ts
 import { dither, make, quantize, sRGB } from '@games/render';
 
-quantize(make(sRGB, 0.5, 0.5, 0.5), 4);         // 4-bit per channel
-quantize(make(sRGB, 1, 0, 0), 'rgb565');        // 5-6-5 layout
+quantize(make(sRGB, 0.5, 0.5, 0.5), 4); // 4-bit per channel
+quantize(make(sRGB, 1, 0, 0), 'rgb565'); // 5-6-5 layout
 quantize(make(sRGB, 0.5, 0.5, 0.5), 'rgba4444');
 quantize(make(sRGB, 0.5, 0.5, 0.5), 'rgb1010102');
 quantize(make(sRGB, 0.5, 0.5, 0.5), 'rgb332');
@@ -791,32 +942,249 @@ dither(pixels, 320, 240, { mode: 'floyd-steinberg' });
   none              Quantize without dithering.
 ```
 
-## Serialization
+## CAM16 appearance model
+
+The `cam16` module implements the CIE 248:2022 color appearance
+model. CAM16 predicts how a color appears under a specific viewing
+environment. The output is a set of perceptual attributes, not a
+color value.
+
 ```ts
-// Encode a large palette to a file on Node.
+import { cam16FromXYZ, make, sRGB, xyzFromCAM16 } from '@games/render';
+
+const c = make(sRGB, 0.5, 0.5, 0.5);
+const cam = cam16FromXYZ(c);
+
+cam.J; // lightness, 0 to 100
+cam.C; // chroma
+cam.h; // hue angle in degrees
+cam.M; // colorfulness
+cam.s; // saturation
+cam.Q; // brightness
+
+const back = xyzFromCAM16(cam);
+```
+
+### Viewing environment
+
+```ts
+import type { CAM16Env } from '@games/render';
+
+const env: CAM16Env = {
+  whitePoint: 'D65',
+  adaptingLuminance: 20,
+  backgroundLuminance: 0.2,
+  surround: 'average',
+};
+```
+
+The defaults match the CIE 248:2022 reference for "average" surround
+viewing. `J` is nearly invariant to the adapting luminance. `Q`
+scales with it. Lower ambient light gives lower `Q`. Higher ambient
+light gives higher `Q`.
+
+### When to use CAM16
+
+CAM16 is a research and quality-control tool. It is not a rendering
+space. Use it for perceptual studies, for accessibility checks, and
+for verifying that two colors look the same under different
+illuminants. Use OKLab for real-time blending.
+
+## ICC profile reader
+
+The `icc` module reads ICC v2 and v4 profiles. It supports matrix
+and TRC profiles. It does not support LUT-based profiles yet.
+
+```ts
+import { applyProfile, make, parseICC, sRGB, toProfileSpace } from '@games/render';
+
+const bytes = await fetch('./display.icc').then((r) => r.arrayBuffer());
+const profile = parseICC(bytes);
+
+// Device RGB to PCS. The PCS is D50. The result is adapted to D65.
+const xyz = applyProfile(make(sRGB, 1, 0, 0), profile);
+
+// PCS to a device space.
+const back = toProfileSpace(xyz, profile, sRGB);
+```
+
+### Supported profiles
+
+```text
+  RGB matrix + TRC    Yes.
+  Gray TRC            Yes.
+  LUT (A2B0, B2A0)    No. Throws a clear error.
+```
+
+The parser detects the byte order from the profile size field. It
+reads the header, the tag table, the primaries matrix, and the TRC
+curves.
+
+## Color science helpers
+
+The `science` module provides four helpers for color grading and
+calibration.
+
+```ts
+import {
+  chromaticityCoordinates,
+  colorTemperature,
+  dominantWavelength,
+  make,
+  metamerCheck,
+  sRGB,
+} from '@games/render';
+
+chromaticityCoordinates(make(sRGB, 1, 1, 1)); // { x: 0.3127, y: 0.329 }
+dominantWavelength(make(sRGB, 1, 0, 0)); // near 611 nm
+colorTemperature(make(sRGB, 1, 1, 1)); // near 6500 K
+metamerCheck(colorA, colorB); // D65 vs A
+```
+
+### What each helper does
+
+```text
+  chromaticityCoordinates   xy coordinates of a color.
+  dominantWavelength        Closest spectral locus wavelength in nm.
+  colorTemperature          Correlated color temperature in Kelvin.
+  metamerCheck              Do two colors match under one light
+                            but differ under another?
+```
+
+`colorTemperature` uses the McCamy approximation. It is accurate
+between 2000 K and 25000 K.
+
+## Shader snippet generation
+
+The `shader` module emits shader constants from the engine's own
+colors. This stops hand-written constants from drifting.
+
+```ts
+import { make, sRGB, toShader } from '@games/render';
+
+toShader(make(sRGB, 1, 0, 0), 'wgsl');
+// "const Linear_sRGB = vec4<f32>(1.0, 0.0, 0.0, 1.0);"
+
+toShader(make(sRGB, 1, 0, 0), 'hlsl', { name: 'kRed' });
+// "static const float4 kRed = float4(1.0, 0.0, 0.0, 1.0);"
+```
+
+### Languages
+
+```text
+  hlsl   DirectX.       static const float4 name = float4(...);
+  glsl   OpenGL.        const highp vec4 name = vec4(...);
+  wgsl   WebGPU.        const name = vec4<f32>(...);
+  msl    Metal.         constant float4 name = float4(...);
+```
+
+### Options
+
+```text
+  space       The output color space. Defaults to 'Linear_sRGB'.
+  precision   GLSL only. 'lowp', 'mediump', or 'highp'.
+  name        Overrides the auto-generated identifier.
+```
+
+## Serialization
+
+The `serialize` module writes palettes and gradients to JSON or
+MessagePack.
+
+```ts
+import { fromJSON, make, packPalette, sRGB, toJSON, toMsgPack, unpackPalette } from '@games/render';
+
+const palette = packPalette([make(sRGB, 1, 0, 0), make(sRGB, 0, 0, 1)]);
+
+// JSON. Human readable.
+const text = toJSON(palette);
+const back = unpackPalette(fromJSON(text));
+
+// MessagePack. Compact for integers and repeated strings.
+const bytes = toMsgPack(palette);
+```
+
+### Streaming
+
+For large palettes, use the streaming API.
+
+```ts
 import { createWriteStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { packPalette, toMsgPackStream, make, sRGB } from '@games/render';
+import { fromMsgPackStream, packPalette, toMsgPackStream, unpackPalette } from '@games/render';
 
-const palette = packPalette(
-  Array.from({ length: 100_000 }, (_, i) =>
-    make(sRGB, i / 100_000, 1 - i / 100_000, 0.5),
-  ),
-);
+const palette = packPalette(largeColorArray);
 
 await pipeline(
   Readable.from(toMsgPackStream(palette, { chunkSize: 128 * 1024 })),
-  createWriteStream('huge-palette.msgpack'),
+  createWriteStream('palette.msgpack'),
 );
 
-// Decode from a file.
-import { createReadStream } from 'node:fs';
-import { fromMsgPackStream, unpackPalette } from '@games/render';
-
-const data = await fromMsgPackStream(createReadStream('huge-palette.msgpack'));
+const data = await fromMsgPackStream(createReadStream('palette.msgpack'));
 const colors = unpackPalette(data);
 ```
+
+The decoder accepts any `AsyncIterable<Uint8Array>`. That covers
+Node streams, Web Streams, and file handles on the File System
+Access API.
+
+### When to use which format
+
+```text
+  JSON          Human-readable. Good for config and for small palettes.
+  MessagePack   Compact for integer colors and repeated strings.
+                Larger than JSON for arbitrary float64 channels.
+  Stream        For palettes too large to fit comfortably in memory.
+```
+
+## Fast batch conversion
+
+The `wasm` module provides `convertBatchSIMD` and `convertBatchFast`.
+Both are faster than the standard `convertBatch` from `bridge.ts`.
+
+```ts
+import { convertBatchFast, make, Linear_sRGB, sRGB } from '@games/render';
+
+const encoded = [make(sRGB, 0.5, 0.2, 0.8), make(sRGB, 0.1, 0.9, 0.3)];
+const linear = convertBatchFast(encoded, Linear_sRGB);
+```
+
+### Paths
+
+```text
+  convertBatch       The safe baseline. Calls convert per color.
+  convertBatchFast   Hoists the matrix lookups out of the loop.
+  convertBatchSIMD   A future WASM SIMD path. Falls back today.
+```
+
+The WASM path is not yet implemented. The interface is stable so a
+future implementation can drop in without a breaking change. The
+`wasmReady` flag reports whether the WASM path is active. It is
+`false` in this version.
+
+## Development tools
+
+The `debug` module provides diagnostics for development builds.
+
+```ts
+import { debugFormat, make, sRGB, warnOutOfGamut } from '@games/render';
+
+warnOutOfGamut(wide, sRGB, 'sprite.tint');
+// console.warn: [sprite.tint] Display_P3 -> sRGB out of gamut: ...
+
+console.log(debugFormat(make(sRGB, 1, 0, 0)));
+// sRGB (IEC 61966-2-1) [R, G, B]
+//   c1: 1.0000 [0, 1] ok
+//   c2: 0.0000 [0, 1] ok
+//   c3: 0.0000 [0, 1] ok
+//   alpha: 1.0000 [0, 1] ok
+//   in sRGB gamut: yes
+```
+
+Both functions are no-ops when `NODE_ENV` is `production`. Bundlers
+that replace `process.env.NODE_ENV` at build time can tree-shake the
+whole module.
 
 ## Building your own space
 
@@ -824,11 +1192,7 @@ The library supports custom spaces. Use `makeSpace` with a full
 `SpaceDescriptor`.
 
 ```ts
-import {
-  make, makeSpace, sRGB,
-  type ColorSpaceDef,
-  type SpaceDescriptor,
-} from '@games/render';
+import { make, makeSpace, sRGB, type ColorSpaceDef, type SpaceDescriptor } from '@games/render';
 
 const myDescriptor: SpaceDescriptor = {
   name: 'Studio Log',
@@ -847,10 +1211,7 @@ const myDescriptor: SpaceDescriptor = {
   channelNames: ['R', 'G', 'B'],
 };
 
-export const StudioLog: ColorSpaceDef<'StudioLog'> = makeSpace(
-  'StudioLog',
-  myDescriptor,
-);
+export const StudioLog: ColorSpaceDef<'StudioLog'> = makeSpace('StudioLog', myDescriptor);
 
 const c = make(StudioLog, 0.5, 0.5, 0.5);
 ```
@@ -865,6 +1226,7 @@ pattern.
 
 If the custom space lives inside `src/color/`, import
 `makeSpace`, `make`, and the types with a relative path:
+
 ```ts
 import { make } from '../convert';
 import { makeSpace, type ColorSpaceDef, type SpaceDescriptor } from '../space';
@@ -875,23 +1237,26 @@ import { makeSpace, type ColorSpaceDef, type SpaceDescriptor } from '../space';
 The module follows a small set of rules. Follow them when you extend
 it.
 
-1. **One name per concept.** "Encoded" means after the OETF. "Linear"
-   means before the EOTF. Use these words in code and in comments.
-2. **One direction per function.** `toXYZ` converts to XYZ. `fromXYZ`
-   converts from XYZ. Do not mix the directions.
-3. **One range per channel.** Never apply a single min and max to all
-   three channels.
+1. **One name per concept.** "Encoded" means after the OETF.
+   "Linear" means before the EOTF. Use these words in code and in
+   comments.
+2. **One direction per function.** `toXYZ` converts to XYZ.
+   `fromXYZ` converts from XYZ. Do not mix the directions.
+3. **One range per channel.** Never apply a single min and max to
+   all three channels.
 4. **Active voice in docs.** "The parser reads the file" beats "The
    file is read."
-5. **Short sentences.** Under 25 words for descriptive text. Under 20
-   for instructions.
+5. **Short sentences.** Under 25 words for descriptive text. Under
+   20 for instructions.
 6. **Match the import style to the location.** Application code and
-  tests import from `@games/render`. Source files inside
-  `src/color/` import each other with relative paths. Never import
-  from a deep path such as `@games/render/src/color/convert`.
+   tests import from `@games/render`. Source files inside
+   `src/color/` import each other with relative paths. Never import
+   from a deep path such as `@games/render/src/color/convert`.
 7. **One test file per source file.** Tests live under
-   `packages/render/test`.  Source lives under
-  `packages/render/src`
+   `packages/render/test`. Source lives under `packages/render/src`.
+8. **The tuple is a view. The object is canonical.** Every function
+   that accepts a tuple converts it to a `ColorValue` at the top.
+   Do not try to smuggle the space tag through the tuple.
 
 ## Known limits
 
@@ -902,15 +1267,14 @@ it.
   channel of white. Round-trips between OKLab and sRGB can be off by
   that amount. Gamut mapping clamps the result.
 - `fromHex` accepts `#RGB`, `#RGBA`, `#RRGGBB`, and `#RRGGBBAA`. It
-  throws on anything else. The `#RGB` shorthand expands by duplicating
-  each nibble.
+  throws on anything else. The `#RGB` shorthand expands by
+  duplicating each nibble.
 - `mix` defaults to OKLab. OKLab gives perceptual blending. Pass an
   explicit working space when you want sRGB or another space.
-- `convertBatch` loops over `convert`. It does not yet hoist the
-  matrix lookups. The optimization is deferred. See Roadmap 4.5.
-  A truly hoisted path would require exporting the private
-  `toXYZ` and `fromXYZ` helpers from `convert.ts`. That expands
-  the public surface. Weigh the cost before exposing them.
+- `convertBatch` loops over `convert`. `convertBatchFast` hoists the
+  matrix lookups. A real SIMD path would need a build step for WASM.
+  The `convertBatchSIMD` interface is stable but currently returns
+  the fast path.
 - The `sample` dispatcher on `MultiStopGradient` returns the first
   stop. A multi-stop gradient has no geometry. Call `sampleMultiStop`
   directly with a parameter.
@@ -920,6 +1284,19 @@ it.
 - The `agx` tone map is a compact fit. It is close to the Sobotka
   2022 curve for display use. Swap in the full polynomial for
   bit-exact color grading.
+- The ICC reader supports matrix and TRC profiles. LUT-based
+  profiles throw. This covers display profiles and standard working
+  spaces.
+- The `ColorTuple<S>` brand is type-only. It does not survive
+  `[...c]`, `c.slice()`, `structuredClone(c)`, or a JSON round-trip.
+  Use `fromTuple(tuple, space)` to reattach the space.
+- CAM16 is a model, not a space. Its output is a `CAM16` object, not
+  a `ColorValue`. It cannot flow through the interchange pipeline.
+- `Jzazbz` and `JzCzHz` use an absolute luminance reference of
+  10000 cd/m^2. Inputs relative to a different reference must scale
+  first.
+- `PS5` and `Switch` emit string literals, not real SDK enums. Map
+  them in your renderer. Pin the mapping to a specific SDK version.
 
 ## References
 
@@ -927,6 +1304,7 @@ it.
 - CSS Color 4 gamut mapping: https://www.w3.org/TR/css-color-4/#css-gamut-mapping
 - ITU-R BT.2100 (PQ and HLG): https://www.itu.int/rec/R-REC-BT.2100
 - OKLab specification: https://bottosson.github.io/posts/oklab/
+- Jzazbz (Safdar et al 2017): https://www.osapublishing.org/oe/fulltext.cfm?uri=oe-25-13-15131
 - Colour-science reference matrices: https://www.colour-science.org/
 - WebGPU canvas configuration: https://gpuweb.github.io/gpuweb/#canvas-configuration
 - Porter-Duff compositing: https://keithp.com/~keithp/porterduff/p253-porter.pdf
@@ -936,7 +1314,48 @@ it.
 - ACEScct: https://docs.acescentral.com/specifications/acescct/
 - ACEScc: https://docs.acescentral.com/specifications/acescc/
 - ARRI LogC3: https://www.arri.com/en/learn-help/learn-help-camera-system/white-papers
+- CAM16 (CIE 248:2022): https://cie.co.at/publications/cie-2482022
+- ICC v4 specification: https://www.color.org/specification/ICC.1-2022-05.pdf
+- MessagePack spec: https://github.com/msgpack/msgpack/blob/master/spec.md
 - Bayer dithering: https://en.wikipedia.org/wiki/Ordered_dithering
 - Floyd-Steinberg: https://en.wikipedia.org/wiki/Floyd%E2%80%93Steinberg_dithering
 
----
+## Summary of changes
+
+| Section                   | Change                                                                                                                             |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Title                     | Prepended `#` back. Full path in the header line.                                                                                  |
+| Contents                  | Added entries for CAM16, ICC, science, shader, serialize, WASM, debug.                                                             |
+| What the module gives you | Updated counts. Twenty-four spaces. Eight backends. Added six bullets for the new modules.                                         |
+| Quick start               | Unchanged. Field names in examples already use the new form.                                                                       |
+| Import conventions        | Moved to its own section for clarity.                                                                                              |
+| Module map                | Full update. Added `tuple.ts`, `cam16.ts`, `science.ts`, `shader.ts`, `debug.ts`, `icc/`, `serialize/`, `wasm/`. Added test files. |
+| Core concepts             | Renamed all fields from `r/g/b/a` to `c1/c2/c3/alpha`. Added the `ColorTuple<S>` section with the boundary rule.                   |
+| Three-channel layout      | Renamed table columns. Added Jzazbz row.                                                                                           |
+| Channel ranges            | Renamed to `rangeC1` etc.                                                                                                          |
+| Color spaces              | Twenty-four spaces. Added Jzazbz and JzCzHz. Updated the family table.                                                             |
+| Conversion pipeline       | Added Jzazbz and JzCzHz to the special-case list. Showed the tuple overload.                                                       |
+| Gamut mapping             | Added the `expandGamut` subsection.                                                                                                |
+| Backend adapters          | Eight adapters. Added PS5, Switch, Software. Added notes per adapter.                                                              |
+| Color operations          | Renamed fields in examples.                                                                                                        |
+| Alpha compositing         | Renamed fields in examples.                                                                                                        |
+| Mutable color             | Renamed `m.r` and `m.g` to `m.c1` and `m.c2`.                                                                                      |
+| Accessibility             | Unchanged.                                                                                                                         |
+| Delta-E metrics           | Unchanged.                                                                                                                         |
+| Gradients and rasters     | Unchanged.                                                                                                                         |
+| Typed arrays              | Unchanged.                                                                                                                         |
+| CSS parsing               | Unchanged.                                                                                                                         |
+| Tone mapping              | Unchanged.                                                                                                                         |
+| Chromatic adaptation      | Unchanged.                                                                                                                         |
+| Quantization              | Unchanged.                                                                                                                         |
+| CAM16                     | New section.                                                                                                                       |
+| ICC profile reader        | New section.                                                                                                                       |
+| Color science helpers     | New section.                                                                                                                       |
+| Shader snippet generation | New section.                                                                                                                       |
+| Serialization             | Expanded. JSON, MessagePack, and streaming.                                                                                        |
+| Fast batch conversion     | New section.                                                                                                                       |
+| Development tools         | New section.                                                                                                                       |
+| Building your own space   | Unchanged.                                                                                                                         |
+| Design rules              | Added rule 8 about the tuple view.                                                                                                 |
+| Known limits              | Added six entries for the new modules.                                                                                             |
+| References                | Added six links for CAM16, ICC, MessagePack, Jzazbz.                                                                               |
