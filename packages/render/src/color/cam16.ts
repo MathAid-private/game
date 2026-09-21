@@ -267,7 +267,7 @@ export function cam16FromXYZ<S extends ColorSpaceDef<string>>(
   const xyz = convert(color, XYZ_D65);
   const P = prepareEnv(env);
 
-  const [Rr, Gr, Br] = mul3(M_CAT16, xyz.r, xyz.g, xyz.b);
+  const [Rr, Gr, Br] = mul3(M_CAT16, xyz.c1, xyz.c2, xyz.c3);
   const [Ra, Ga, Ba] = postAdapt(Rr * P.DR, Gr * P.DG, Br * P.DB, P.FL);
 
   const a = Ra - (12 * Ga) / 11 + Ba / 11;

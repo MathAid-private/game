@@ -154,44 +154,44 @@ export function quantize<S extends ColorSpaceDef<string>>(
     const levels = 2 ** bits - 1;
     return make(
       sRGB,
-      Math.round(c.r * levels) / levels,
-      Math.round(c.g * levels) / levels,
-      Math.round(c.b * levels) / levels,
-      c.a,
+      Math.round(c.c1 * levels) / levels,
+      Math.round(c.c2 * levels) / levels,
+      Math.round(c.c3 * levels) / levels,
+      c.alpha,
     );
   }
   switch (bits) {
     case 'rgb565':
       return make(
         sRGB,
-        Math.round(c.r * 31) / 31,
-        Math.round(c.g * 63) / 63,
-        Math.round(c.b * 31) / 31,
-        c.a,
+        Math.round(c.c1 * 31) / 31,
+        Math.round(c.c2 * 63) / 63,
+        Math.round(c.c3 * 31) / 31,
+        c.alpha,
       );
     case 'rgba4444':
       return make(
         sRGB,
-        Math.round(c.r * 15) / 15,
-        Math.round(c.g * 15) / 15,
-        Math.round(c.b * 15) / 15,
-        Math.round(c.a * 15) / 15,
+        Math.round(c.c1 * 15) / 15,
+        Math.round(c.c2 * 15) / 15,
+        Math.round(c.c3 * 15) / 15,
+        Math.round(c.alpha * 15) / 15,
       );
     case 'rgb1010102':
       return make(
         sRGB,
-        Math.round(c.r * 1023) / 1023,
-        Math.round(c.g * 1023) / 1023,
-        Math.round(c.b * 1023) / 1023,
-        Math.round(c.a * 3) / 3,
+        Math.round(c.c1 * 1023) / 1023,
+        Math.round(c.c2 * 1023) / 1023,
+        Math.round(c.c3 * 1023) / 1023,
+        Math.round(c.alpha * 3) / 3,
       );
     case 'rgb332':
       return make(
         sRGB,
-        Math.round(c.r * 7) / 7,
-        Math.round(c.g * 7) / 7,
-        Math.round(c.b * 3) / 3,
-        c.a,
+        Math.round(c.c1 * 7) / 7,
+        Math.round(c.c2 * 7) / 7,
+        Math.round(c.c3 * 3) / 3,
+        c.alpha,
       );
   }
 }
@@ -259,7 +259,7 @@ export function dither<S extends ColorSpaceDef<string>>(
         // Spread the threshold across one LSB of the 8-bit target.
         const step = 1 / 255;
         const offset = (threshold - 0.5) * step;
-        out[i] = quantize(make(sRGB, c.r + offset, c.g + offset, c.b + offset, c.a), 'rgb565');
+        out[i] = quantize(make(sRGB, c.c1 + offset, c.c2 + offset, c.c3 + offset, c.alpha), 'rgb565');
       }
     }
     return out;
@@ -267,10 +267,10 @@ export function dither<S extends ColorSpaceDef<string>>(
 
   // Floyd-Steinberg.
   const work: { r: number; g: number; b: number; a: number }[] = srgbColors.map((c) => ({
-    r: c.r,
-    g: c.g,
-    b: c.b,
-    a: c.a,
+    r: c.c1,
+    g: c.c2,
+    b: c.c3,
+    a: c.alpha,
   }));
   const out: ColorValue<typeof sRGB>[] = new Array(colors.length);
   const R_MAX = 31;

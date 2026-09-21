@@ -33,5 +33,6 @@ export * from './serialize';
 export * from './shader';
 export * from './space';
 export * from './tone-mapping';
+export * from './tuple';
 export * from './w3c';
 export * from './wasm';

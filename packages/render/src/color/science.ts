@@ -118,11 +118,11 @@ export function chromaticityCoordinates<S extends ColorSpaceDef<string>>(
   color: ColorValue<S>,
 ): { readonly x: number; readonly y: number } {
   const xyz = convert(color, XYZ_D65);
-  const sum = xyz.r + xyz.g + xyz.b;
+  const sum = xyz.c1 + xyz.c2 + xyz.c3;
   if (sum <= 1e-12) {
     return { x: D65_XY[0], y: D65_XY[1] };
   }
-  return { x: xyz.r / sum, y: xyz.g / sum };
+  return { x: xyz.c1 / sum, y: xyz.c2 / sum };
 }
 
 // -----------------------------------------------------------------

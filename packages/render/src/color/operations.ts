@@ -80,7 +80,7 @@ export function lighten<S extends ColorSpaceDef<string>>(
   amount: number,
 ): ColorValue<typeof OKLCh> {
   const lch = convert(color, OKLCh);
-  return make(OKLCh, clamp01(lch.r + amount), lch.g, lch.b, lch.a);
+  return make(OKLCh, clamp01(lch.c1 + amount), lch.c2, lch.c3, lch.alpha);
 }
 
 /**
@@ -107,7 +107,7 @@ export function darken<S extends ColorSpaceDef<string>>(
   amount: number,
 ): ColorValue<typeof OKLCh> {
   const lch = convert(color, OKLCh);
-  return make(OKLCh, clamp01(lch.r - amount), lch.g, lch.b, lch.a);
+  return make(OKLCh, clamp01(lch.c1 - amount), lch.c2, lch.c3, lch.alpha);
 }
 
 // -----------------------------------------------------------------
@@ -138,8 +138,8 @@ export function saturate<S extends ColorSpaceDef<string>>(
 ): ColorValue<typeof OKLCh> {
   const lch = convert(color, OKLCh);
   const max = OKLCh.descriptor.channelRanges[1].max;
-  const c = Math.max(0, Math.min(max, lch.g + amount));
-  return make(OKLCh, lch.r, c, lch.b, lch.a);
+  const c = Math.max(0, Math.min(max, lch.c2 + amount));
+  return make(OKLCh, lch.c1, c, lch.c3, lch.alpha);
 }
 
 /**
@@ -165,8 +165,8 @@ export function desaturate<S extends ColorSpaceDef<string>>(
   amount: number,
 ): ColorValue<typeof OKLCh> {
   const lch = convert(color, OKLCh);
-  const c = Math.max(0, lch.g - amount);
-  return make(OKLCh, lch.r, c, lch.b, lch.a);
+  const c = Math.max(0, lch.c2 - amount);
+  return make(OKLCh, lch.c1, c, lch.c3, lch.alpha);
 }
 
 // -----------------------------------------------------------------
@@ -198,7 +198,7 @@ export function rotateHue<S extends ColorSpaceDef<string>>(
   degrees: number,
 ): ColorValue<typeof OKLCh> {
   const lch = convert(color, OKLCh);
-  return make(OKLCh, lch.r, lch.g, wrapHue(lch.b + degrees), lch.a);
+  return make(OKLCh, lch.c1, lch.c2, wrapHue(lch.c3 + degrees), lch.alpha);
 }
 
 /**
@@ -254,10 +254,10 @@ export function invert<S extends ColorSpaceDef<string>>(color: ColorValue<S>): C
   const [rr, rg, rb] = color._space.descriptor.channelRanges;
   return make(
     color._space,
-    rr.max - color.r + rr.min,
-    rg.max - color.g + rg.min,
-    rb.max - color.b + rb.min,
-    color.a,
+    rr.max - color.c1 + rr.min,
+    rg.max - color.c2 + rg.min,
+    rb.max - color.c3 + rb.min,
+    color.alpha,
   );
 }
 
@@ -280,6 +280,6 @@ export function invert<S extends ColorSpaceDef<string>>(color: ColorValue<S>): C
  */
 export function grayscale<S extends ColorSpaceDef<string>>(color: ColorValue<S>): ColorValue<S> {
   const lch = convert(color, OKLCh);
-  const gray = make(OKLCh, lch.r, 0, lch.b, lch.a);
+  const gray = make(OKLCh, lch.c1, 0, lch.c3, lch.alpha);
   return convert(gray, color._space);
 }

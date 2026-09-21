@@ -71,7 +71,7 @@ import { type ColorSpaceDef, type ColorSpaceId, Linear_sRGB, sRGB } from './spac
  * > = {
  *   colorSpaceEnum: () => 'MY_COLOR_SPACE_SRGB',
  *   pixelFormatEnum: () => 'MY_FORMAT_RGBA8',
- *   clearColor: (c) => ({ r: c.r, g: c.g, b: c.b, a: c.a }),
+ *   clearColor: (c) => ({ r: c.c1, g: c.c2, b: c.c3, a: c.alpha }),
  *   configure: () => ({
  *     format: 'MY_FORMAT_RGBA8',
  *     colorSpace: 'MY_COLOR_SPACE_SRGB',
@@ -239,7 +239,7 @@ export const DX12: BackendAdapter<DX12ColorSpace, DX12PixelFormat, DX12ClearColo
     const c = convert(color, Linear_sRGB);
     const fmt = this.pixelFormatEnum(sRGB.id);
     return {
-      Color: [c.r, c.g, c.b, c.a],
+      Color: [c.c1, c.c2, c.c3, c.alpha],
       Format: fmt,
     };
   },
@@ -354,7 +354,7 @@ export const Vulkan: BackendAdapter<VkColorSpace, VkFormat, VkClearColor, VkSurf
   clearColor<S extends ColorSpaceDef<string>>(color: ColorValue<S>): VkClearColor {
     // Vulkan float targets expect linear values.
     const c = convert(color, Linear_sRGB);
-    return { float32: [c.r, c.g, c.b, c.a] };
+    return { float32: [c.c1, c.c2, c.c3, c.alpha] };
   },
 
   configure(id): VkSurfaceConfig {
@@ -464,7 +464,7 @@ export const Metal: BackendAdapter<CGColorSpaceName, MTLPixelFormat, MTLClearCol
 
   clearColor<S extends ColorSpaceDef<string>>(color: ColorValue<S>): MTLClearColor {
     const c = convert(color, Linear_sRGB);
-    return { red: c.r, green: c.g, blue: c.b, alpha: c.a };
+    return { red: c.c1, green: c.c2, blue: c.c3, alpha: c.alpha };
   },
 
   configure(id): MetalConfig {
@@ -567,7 +567,7 @@ export const OpenGL: BackendAdapter<GLColorSpaceHint, GLInternalFormat, GLClearC
   clearColor<S extends ColorSpaceDef<string>>(color: ColorValue<S>): GLClearColor {
     // OpenGL with GL_FRAMEBUFFER_SRGB: supply linear values.
     const c = convert(color, Linear_sRGB);
-    return { r: c.r, g: c.g, b: c.b, a: c.a };
+    return { r: c.c1, g: c.c2, b: c.c3, a: c.alpha };
   },
 
   configure(id): GLConfig {
@@ -679,7 +679,7 @@ export const WebGPU: BackendAdapter<
 
   clearColor<S extends ColorSpaceDef<string>>(color: ColorValue<S>): GPUClearColor {
     const c = convert(color, sRGB);
-    return { r: c.r, g: c.g, b: c.b, a: c.a };
+    return { r: c.c1, g: c.c2, b: c.c3, a: c.alpha };
   },
 
   configure(id): WebGPUConfig {
@@ -799,7 +799,7 @@ export const PS5: BackendAdapter<PS5ColorSpace, PS5PixelFormat, PS5ClearColor, P
     const c = convert(color, Linear_sRGB);
     const fmt = this.pixelFormatEnum(sRGB.id);
     return {
-      color: [c.r, c.g, c.b, c.a],
+      color: [c.c1, c.c2, c.c3, c.alpha],
       format: fmt,
     };
   },
@@ -911,7 +911,7 @@ export const Switch: BackendAdapter<NVNColorSpace, NVNFormat, NVNClearColor, NVN
 
   clearColor<S extends ColorSpaceDef<string>>(color: ColorValue<S>): NVNClearColor {
     const c = convert(color, Linear_sRGB);
-    return { rgba: [c.r, c.g, c.b, c.a] };
+    return { rgba: [c.c1, c.c2, c.c3, c.alpha] };
   },
 
   configure(id): NVNConfig {
@@ -994,10 +994,10 @@ export const Software = {
   clearColor<S extends ColorSpaceDef<string>>(color: ColorValue<S>): Uint8ClampedArray {
     const c = convert(color, sRGB);
     const out = new Uint8ClampedArray(4);
-    out[0] = Math.round(Math.max(0, Math.min(1, c.r)) * 255);
-    out[1] = Math.round(Math.max(0, Math.min(1, c.g)) * 255);
-    out[2] = Math.round(Math.max(0, Math.min(1, c.b)) * 255);
-    out[3] = Math.round(Math.max(0, Math.min(1, c.a)) * 255);
+    out[0] = Math.round(Math.max(0, Math.min(1, c.c1)) * 255);
+    out[1] = Math.round(Math.max(0, Math.min(1, c.c2)) * 255);
+    out[2] = Math.round(Math.max(0, Math.min(1, c.c3)) * 255);
+    out[3] = Math.round(Math.max(0, Math.min(1, c.alpha)) * 255);
     return out;
   },
 

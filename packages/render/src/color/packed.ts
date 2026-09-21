@@ -54,7 +54,7 @@ import { type ColorSpaceDef, sRGB } from './space';
  *
  * @description
  * The function converts to sRGB. Each channel is scaled to 0 to 255 and
- * rounded. The result packs the channels as `R << 24 | G << 16 | B << 8 | A`.
+ * rounded. The result packs the channels as `C1 << 24 | C2 << 16 | C3 << 8 | ALPHA`.
  *
  * The high byte is red. The low byte is alpha. This matches the common
  * canvas and `ImageData` layout in web code.
@@ -71,10 +71,10 @@ import { type ColorSpaceDef, sRGB } from './space';
  */
 export function toRGBA8<S extends ColorSpaceDef<string>>(color: ColorValue<S>): number {
   const c = convert(color, sRGB);
-  const r = Math.round(clamp01(c.r) * 255);
-  const g = Math.round(clamp01(c.g) * 255);
-  const b = Math.round(clamp01(c.b) * 255);
-  const a = Math.round(clamp01(c.a) * 255);
+  const r = Math.round(clamp01(c.c1) * 255);
+  const g = Math.round(clamp01(c.c2) * 255);
+  const b = Math.round(clamp01(c.c3) * 255);
+  const a = Math.round(clamp01(c.alpha) * 255);
   return ((r << 24) | (g << 16) | (b << 8) | a) >>> 0;
 }
 
@@ -110,7 +110,7 @@ export function fromRGBA8(packed: number): ColorValue<typeof sRGB> {
  *
  * @description
  * The function converts to sRGB. Each channel is scaled to 0 to 255 and
- * rounded. The result packs the channels as `B << 24 | G << 16 | R << 8 | A`.
+ * rounded. The result packs the channels as `C3 << 24 | C2 << 16 | C1 << 8 | ALPHA`.
  *
  * The high byte is blue. The low byte is alpha. This matches the common
  * layout on Windows DirectX surfaces and in some image codecs.
@@ -125,10 +125,10 @@ export function fromRGBA8(packed: number): ColorValue<typeof sRGB> {
  */
 export function toBGRA8<S extends ColorSpaceDef<string>>(color: ColorValue<S>): number {
   const c = convert(color, sRGB);
-  const r = Math.round(clamp01(c.r) * 255);
-  const g = Math.round(clamp01(c.g) * 255);
-  const b = Math.round(clamp01(c.b) * 255);
-  const a = Math.round(clamp01(c.a) * 255);
+  const r = Math.round(clamp01(c.c1) * 255);
+  const g = Math.round(clamp01(c.c2) * 255);
+  const b = Math.round(clamp01(c.c3) * 255);
+  const a = Math.round(clamp01(c.alpha) * 255);
   return ((b << 24) | (g << 16) | (r << 8) | a) >>> 0;
 }
 
@@ -181,9 +181,9 @@ export function fromBGRA8(packed: number): ColorValue<typeof sRGB> {
  */
 export function toRgb565<S extends ColorSpaceDef<string>>(color: ColorValue<S>): number {
   const c = convert(color, sRGB);
-  const r5 = (Math.round(clamp01(c.r) * 31) & 0x1f) << 11;
-  const g6 = (Math.round(clamp01(c.g) * 63) & 0x3f) << 5;
-  const b5 = Math.round(clamp01(c.b) * 31) & 0x1f;
+  const r5 = (Math.round(clamp01(c.c1) * 31) & 0x1f) << 11;
+  const g6 = (Math.round(clamp01(c.c2) * 63) & 0x3f) << 5;
+  const b5 = Math.round(clamp01(c.c3) * 31) & 0x1f;
   return (r5 | g6 | b5) >>> 0;
 }
 

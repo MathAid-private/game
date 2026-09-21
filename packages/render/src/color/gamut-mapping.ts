@@ -37,7 +37,7 @@
  * @author MathAid
  */
 
-import { type ColorValue, convert, isInRange, make } from './convert';
+import { ColorTuple, type ColorValue, convert, fromTuple, isColorValue, isInRange, make } from './convert';
 import { type ColorSpaceDef, OKLCh, OKLab } from './space';
 
 // -----------------------------------------------------------------
@@ -109,7 +109,7 @@ const DELTA_E_EPSILON = 0.02;
  * // 0.1
  */
 function deltaEOKLab(a: ColorValue<typeof OKLab>, b: ColorValue<typeof OKLab>): number {
-  return Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2);
+  return Math.sqrt((a.c1 - b.c1) ** 2 + (a.c2 - b.c2) ** 2 + (a.c3 - b.c3) ** 2);
 }
 
 // -----------------------------------------------------------------
@@ -125,11 +125,20 @@ function deltaEOKLab(a: ColorValue<typeof OKLab>, b: ColorValue<typeof OKLab>): 
  * `isInRange` helper reads per-channel bounds, so this works for every
  * built-in space.
  *
+ * @note
+ * This function accepts a `ColorTuple<S>` in addition to a
+ * `ColorValue<S>`. The tuple overload converts the tuple to a
+ * `ColorValue` at the top of the function. The rest of the function
+ * works on the object shape. The conversion is required for the
+ * runtime space tag, for structural typing reliability, and to avoid
+ * a global `WeakMap`.
+ *
  * @template S - The source space type.
  * @template T - The target space type.
- *
- * @param color - A color in any space.
- * @param targetSpace - The space to check against.
+ * @param color - A color in any space. Object or tuple.
+ * @param a - The target space, or the source space when `color` is
+ *   a tuple.
+ * @param b - The target space when `color` is a tuple.
  * @returns A `GamutCheckResult`.
  *
  * @example
@@ -140,12 +149,24 @@ function deltaEOKLab(a: ColorValue<typeof OKLab>, b: ColorValue<typeof OKLab>): 
 export function checkGamut<S extends ColorSpaceDef<string>, T extends ColorSpaceDef<string>>(
   color: ColorValue<S>,
   targetSpace: T,
+): GamutCheckResult;
+export function checkGamut<S extends ColorSpaceDef<string>, T extends ColorSpaceDef<string>>(
+  color: ColorTuple<S>,
+  from: S,
+  targetSpace: T,
+): GamutCheckResult;
+export function checkGamut<S extends ColorSpaceDef<string>, T extends ColorSpaceDef<string>>(
+  color: ColorValue<S> | ColorTuple<S>,
+  a: T | S,
+  b?: T,
 ): GamutCheckResult {
-  const converted = convert(color, targetSpace);
-  return {
-    inGamut: isInRange(converted),
-    converted,
-  };
+  let converted: ColorValue<ColorSpaceDef<string>>;
+  if (b === undefined) {
+    converted = convert(color as ColorValue<S>, a as T);
+  } else {
+    converted = convert(color as ColorTuple<S>, a as S, b);
+  }
+  return { inGamut: isInRange(converted), converted };
 }
 
 /**
@@ -159,12 +180,19 @@ export function checkGamut<S extends ColorSpaceDef<string>, T extends ColorSpace
  * The default strategy is `'css-chroma'`. It follows CSS Color 4 and
  * preserves hue and lightness.
  *
+ * @note
+ * This function accepts a `ColorTuple<S>` in addition to a
+ * `ColorValue<S>`. The tuple overload converts the tuple to a
+ * `ColorValue` at the top of the function. See `checkGamut` for the
+ * reasoning.
+ *
  * @template S - The source space type.
  * @template T - The target space type.
- *
- * @param color - A color in any space.
- * @param targetSpace - The destination space. Defines the gamut.
- * @param method - The strategy. Defaults to `"css-chroma"`.
+ * @param color - A color in any space. Object or tuple.
+ * @param a - The target space, or the source space when `color` is
+ *   a tuple.
+ * @param b - The target space when `color` is a tuple.
+ * @param method - The strategy. Defaults to `'css-chroma'`.
  * @returns A `ColorValue<T>` inside the gamut.
  *
  * @example
@@ -175,20 +203,56 @@ export function checkGamut<S extends ColorSpaceDef<string>, T extends ColorSpace
  * // Fast clamp, hue-shifting.
  * const fast = mapToGamut(p3Color, sRGB, 'clamp');
  */
-export function mapToGamut<S extends ColorSpaceDef<string>, T extends ColorSpaceDef<string>>(
+export function mapToGamut<
+  S extends ColorSpaceDef<string>,
+  T extends ColorSpaceDef<string>,
+>(
   color: ColorValue<S>,
   targetSpace: T,
-  method: GamutMappingMethod = 'css-chroma',
+  method?: GamutMappingMethod,
+): ColorValue<T>;
+export function mapToGamut<
+  S extends ColorSpaceDef<string>,
+  T extends ColorSpaceDef<string>,
+>(
+  color: ColorTuple<S>,
+  from: S,
+  targetSpace: T,
+  method?: GamutMappingMethod,
+): ColorValue<T>;
+export function mapToGamut<
+  S extends ColorSpaceDef<string>,
+  T extends ColorSpaceDef<string>,
+>(
+  color: ColorValue<S> | ColorTuple<S>,
+  a: S | T,
+  b?: T | GamutMappingMethod,
+  c?: GamutMappingMethod,
 ): ColorValue<T> {
-  // Early out: already in gamut.
-  const inTarget = convert(color, targetSpace);
+  let from: S;
+  let to: T;
+  let method: GamutMappingMethod;
+  let c0: ColorValue<S>;
+
+  if (isColorValue(color)) {
+    c0 = color as ColorValue<S>;
+    from = c0._space;
+    to = a as T;
+    method = (b as GamutMappingMethod | undefined) ?? 'css-chroma';
+  } else {
+    from = a as S;
+    to = b as T;
+    method = c ?? 'css-chroma';
+    c0 = fromTuple(color as ColorTuple<S>, from);
+  }
+
+  const inTarget = convert(c0, to);
   if (isInRange(inTarget)) return inTarget;
 
   if (method === 'clamp') {
-    return clampGamut(inTarget, targetSpace);
+    return clampGamut(inTarget, to);
   }
-
-  return cssChromaBisect(color, targetSpace);
+  return cssChromaBisect(c0, to);
 }
 
 /**
@@ -214,10 +278,10 @@ function clampGamut<T extends ColorSpaceDef<string>>(
   space: T,
 ): ColorValue<T> {
   const [rr, rg, rb] = space.descriptor.channelRanges;
-  const cr = Math.max(rr.min, Math.min(rr.max, color.r));
-  const cg = Math.max(rg.min, Math.min(rg.max, color.g));
-  const cb = Math.max(rb.min, Math.min(rb.max, color.b));
-  return make(space, cr, cg, cb, color.a);
+  const cc1 = Math.max(rr.min, Math.min(rr.max, color.c1));
+  const cc2 = Math.max(rg.min, Math.min(rg.max, color.c2));
+  const cc3 = Math.max(rb.min, Math.min(rb.max, color.c3));
+  return make(space, cc1, cc2, cc3, color.alpha);
 }
 
 /**
@@ -248,30 +312,25 @@ function cssChromaBisect<S extends ColorSpaceDef<string>, T extends ColorSpaceDe
   targetSpace: T,
 ): ColorValue<T> {
   const lch = convert(color, OKLCh);
-  const L = lch.r;
-  const H = lch.b;
+  const L = lch.c1;
+  const H = lch.c3;
 
-  // White and black poles. Return the exact white and black in the
-  // target space, then clamp to remove matrix rounding error.
   if (L >= 1) {
-    const white = convert(make(OKLab, 1, 0, 0), targetSpace);
-    return clampGamut(white, targetSpace);
+    return clampGamut(convert(make(OKLab, 1, 0, 0), targetSpace), targetSpace);
   }
   if (L <= 0) {
-    const black = convert(make(OKLab, 0, 0, 0), targetSpace);
-    return clampGamut(black, targetSpace);
+    return clampGamut(convert(make(OKLab, 0, 0, 0), targetSpace), targetSpace);
   }
 
   let lo = 0;
-  let hi = lch.g;
+  let hi = lch.c2;
   let current = lch;
 
   const MAX_ITER = 20;
   for (let i = 0; i < MAX_ITER; i++) {
     const mid = (lo + hi) / 2;
-    current = make(OKLCh, L, mid, H, color.a);
+    current = make(OKLCh, L, mid, H, color.alpha);
     const mapped = convert(current, targetSpace);
-
     if (isInRange(mapped)) {
       const clamped = clampGamut(mapped, targetSpace);
       const labMapped = convert(mapped, OKLab);
@@ -284,8 +343,7 @@ function cssChromaBisect<S extends ColorSpaceDef<string>, T extends ColorSpaceDe
     }
   }
 
-  const result = convert(current, targetSpace);
-  return clampGamut(result, targetSpace);
+  return clampGamut(convert(current, targetSpace), targetSpace);
 }
 
 /**
@@ -309,10 +367,26 @@ function cssChromaBisect<S extends ColorSpaceDef<string>, T extends ColorSpaceDe
 export function checkGamutAll<S extends ColorSpaceDef<string>>(
   color: ColorValue<S>,
   spaces: ReadonlyArray<ColorSpaceDef<string>>,
+): Record<string, GamutCheckResult>;
+export function checkGamutAll<S extends ColorSpaceDef<string>>(
+  color: ColorTuple<S>,
+  from: S,
+  spaces: ReadonlyArray<ColorSpaceDef<string>>,
+): Record<string, GamutCheckResult>;
+export function checkGamutAll<S extends ColorSpaceDef<string>>(
+  color: ColorValue<S> | ColorTuple<S>,
+  a: S | ReadonlyArray<ColorSpaceDef<string>>,
+  b?: ReadonlyArray<ColorSpaceDef<string>>,
 ): Record<string, GamutCheckResult> {
   const out: Record<string, GamutCheckResult> = {};
-  for (const space of spaces) {
-    out[space.id] = checkGamut(color, space);
+  if (b === undefined) {
+    for (const space of a as ReadonlyArray<ColorSpaceDef<string>>) {
+      out[space.id] = checkGamut(color as ColorValue<S>, space);
+    }
+  } else {
+    for (const space of b) {
+      out[space.id] = checkGamut(color as ColorTuple<S>, a as S, space);
+    }
   }
   return out;
 }
@@ -378,9 +452,9 @@ export function expandGamut<S extends ColorSpaceDef<string>, T extends ColorSpac
 
   // Work in OKLCh.
   const lch = convert(color, OKLCh);
-  const L = lch.r;
-  const H = lch.b;
-  const c0 = lch.g;
+  const L = lch.c1;
+  const H = lch.c3;
+  const c0 = lch.c2;
 
   // Gray colors have no direction. Return the input.
   if (c0 < 1e-6) return inTarget;
@@ -403,6 +477,6 @@ export function expandGamut<S extends ColorSpaceDef<string>, T extends ColorSpac
   // Linearly interpolate between the input chroma and the boundary.
   const cBoundary = lo;
   const cNew = c0 + (cBoundary - c0) * Math.min(1, amount);
-  const result = make(OKLCh, L, cNew, H, color.a);
+  const result = make(OKLCh, L, cNew, H, color.alpha);
   return convert(result, targetSpace);
 }

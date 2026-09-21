@@ -327,7 +327,7 @@ export function toCSS<S extends ColorSpaceDef<string>>(
 }
 
 function defaultFormat<S extends ColorSpaceDef<string>>(color: ColorValue<S>): CSSFormat {
-  if (color._space.id === 'sRGB' && color.a === 1) return 'hex';
+  if (color._space.id === 'sRGB' && color.alpha === 1) return 'hex';
   if (color._space.id === 'OKLCh') return 'oklch';
   if (color._space.id === 'Display_P3') return 'color-display-p3';
   return 'rgb';
@@ -339,40 +339,40 @@ function toHexCSS<S extends ColorSpaceDef<string>>(color: ColorValue<S>): string
     Math.round(Math.max(0, Math.min(1, v)) * 255)
       .toString(16)
       .padStart(2, '0');
-  const r = hex(c.r);
-  const g = hex(c.g);
-  const b = hex(c.b);
-  if (c.a === 1) return `#${r}${g}${b}`;
-  const a = hex(c.a);
+  const r = hex(c.c1);
+  const g = hex(c.c2);
+  const b = hex(c.c3);
+  if (c.alpha === 1) return `#${r}${g}${b}`;
+  const a = hex(c.alpha);
   return `#${r}${g}${b}${a}`;
 }
 
 function toRgbCSS<S extends ColorSpaceDef<string>>(color: ColorValue<S>): string {
   const c = convert(color, sRGB);
   const scale = (v: number) => Math.round(Math.max(0, Math.min(1, v)) * 255);
-  const r = scale(c.r);
-  const g = scale(c.g);
-  const b = scale(c.b);
-  if (c.a === 1) return `rgb(${r} ${g} ${b})`;
-  return `rgb(${r} ${g} ${b} / ${c.a.toFixed(3).replace(/\.?0+$/, '')})`;
+  const r = scale(c.c1);
+  const g = scale(c.c2);
+  const b = scale(c.c3);
+  if (c.alpha === 1) return `rgb(${r} ${g} ${b})`;
+  return `rgb(${r} ${g} ${b} / ${c.alpha.toFixed(3).replace(/\.?0+$/, '')})`;
 }
 
 function toHslCSS<S extends ColorSpaceDef<string>>(color: ColorValue<S>): string {
   const h = convert(color, HSL);
-  const hh = Math.round(h.r);
-  const ss = (h.g * 100).toFixed(1).replace(/\.0$/, '');
-  const ll = (h.b * 100).toFixed(1).replace(/\.0$/, '');
-  if (h.a === 1) return `hsl(${hh} ${ss}% ${ll}%)`;
-  return `hsl(${hh} ${ss}% ${ll}% / ${h.a.toFixed(3).replace(/\.?0+$/, '')})`;
+  const hh = Math.round(h.c1);
+  const ss = (h.c2 * 100).toFixed(1).replace(/\.0$/, '');
+  const ll = (h.c3 * 100).toFixed(1).replace(/\.0$/, '');
+  if (h.alpha === 1) return `hsl(${hh} ${ss}% ${ll}%)`;
+  return `hsl(${hh} ${ss}% ${ll}% / ${h.alpha.toFixed(3).replace(/\.?0+$/, '')})`;
 }
 
 function toOklchCSS<S extends ColorSpaceDef<string>>(color: ColorValue<S>): string {
   const c = convert(color, OKLCh);
-  const l = c.r.toFixed(4).replace(/\.?0+$/, '');
-  const ch = c.g.toFixed(4).replace(/\.?0+$/, '');
-  const h = c.b.toFixed(2).replace(/\.?0+$/, '');
-  if (c.a === 1) return `oklch(${l} ${ch} ${h})`;
-  return `oklch(${l} ${ch} ${h} / ${c.a.toFixed(3).replace(/\.?0+$/, '')})`;
+  const l = c.c1.toFixed(4).replace(/\.?0+$/, '');
+  const ch = c.c2.toFixed(4).replace(/\.?0+$/, '');
+  const h = c.c3.toFixed(2).replace(/\.?0+$/, '');
+  if (c.alpha === 1) return `oklch(${l} ${ch} ${h})`;
+  return `oklch(${l} ${ch} ${h} / ${c.alpha.toFixed(3).replace(/\.?0+$/, '')})`;
 }
 
 function toColorFunctionCSS<S extends ColorSpaceDef<string>, T extends ColorSpaceDef<string>>(
@@ -382,6 +382,6 @@ function toColorFunctionCSS<S extends ColorSpaceDef<string>, T extends ColorSpac
 ): string {
   const c = convert(color, space);
   const f = (v: number) => v.toFixed(4).replace(/\.?0+$/, '');
-  if (c.a === 1) return `color(${name} ${f(c.r)} ${f(c.g)} ${f(c.b)})`;
-  return `color(${name} ${f(c.r)} ${f(c.g)} ${f(c.b)} / ${c.a.toFixed(3).replace(/\.?0+$/, '')})`;
+  if (c.alpha === 1) return `color(${name} ${f(c.c1)} ${f(c.c2)} ${f(c.c3)})`;
+  return `color(${name} ${f(c.c1)} ${f(c.c2)} ${f(c.c3)} / ${c.alpha.toFixed(3).replace(/\.?0+$/, '')})`;
 }

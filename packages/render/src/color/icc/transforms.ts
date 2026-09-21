@@ -54,9 +54,9 @@ export function applyProfile<S extends ColorSpaceDef<string>>(
   }
 
   const [rT, gT, bT] = profile.trc;
-  const rl = rT.apply(color.r);
-  const gl = gT.apply(color.g);
-  const bl = bT.apply(color.b);
+  const rl = rT.apply(color.c1);
+  const gl = gT.apply(color.c2);
+  const bl = bT.apply(color.c3);
 
   const m = profile.toPCS;
   const X = m[0] * rl + m[1] * gl + m[2] * bl;
@@ -64,7 +64,7 @@ export function applyProfile<S extends ColorSpaceDef<string>>(
   const Z = m[6] * rl + m[7] * gl + m[8] * bl;
 
   // The profile's PCS is D50. Adapt to D65 for the engine.
-  const d50 = make(XYZ_D65, X, Y, Z, color.a);
+  const d50 = make(XYZ_D65, X, Y, Z, color.alpha);
   return adapt(d50, 'D50', 'D65');
 }
 
@@ -100,16 +100,16 @@ export function toProfileSpace<S extends ColorSpaceDef<string>>(
   const d50 = adapt(color, 'D65', 'D50');
 
   const m = profile.fromPCS;
-  const rl = m[0] * d50.r + m[1] * d50.g + m[2] * d50.b;
-  const gl = m[3] * d50.r + m[4] * d50.g + m[5] * d50.b;
-  const bl = m[6] * d50.r + m[7] * d50.g + m[8] * d50.b;
+  const rl = m[0] * d50.c1 + m[1] * d50.c2 + m[2] * d50.c3;
+  const gl = m[3] * d50.c1 + m[4] * d50.c2 + m[5] * d50.c3;
+  const bl = m[6] * d50.c1 + m[7] * d50.c2 + m[8] * d50.c3;
 
   const [rT, gT, bT] = profile.trc;
   const rEnc = invertTRC(rT, rl);
   const gEnc = invertTRC(gT, gl);
   const bEnc = invertTRC(bT, bl);
 
-  return make(outSpace, rEnc, gEnc, bEnc, color.a);
+  return make(outSpace, rEnc, gEnc, bEnc, color.alpha);
 }
 
 /**

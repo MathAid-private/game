@@ -69,16 +69,16 @@ export function over<Src extends ColorSpaceDef<string>, Dst extends ColorSpaceDe
   dst: ColorValue<Dst>,
 ): ColorValue<Dst> {
   const s = convert(src, dst._space);
-  const sa = s.a;
-  const da = dst.a;
+  const sa = s.alpha;
+  const da = dst.alpha;
   const outA = sa + da * (1 - sa);
   if (outA === 0) return dst;
   const inv = 1 / outA;
   return make(
     dst._space,
-    (s.r * sa + dst.r * da * (1 - sa)) * inv,
-    (s.g * sa + dst.g * da * (1 - sa)) * inv,
-    (s.b * sa + dst.b * da * (1 - sa)) * inv,
+    (s.c1 * sa + dst.c1 * da * (1 - sa)) * inv,
+    (s.c2 * sa + dst.c2 * da * (1 - sa)) * inv,
+    (s.c3 * sa + dst.c3 * da * (1 - sa)) * inv,
     outA,
   );
 }
@@ -120,7 +120,7 @@ export function under<Src extends ColorSpaceDef<string>, Dst extends ColorSpaceD
  * Premultiply the color channels of a color by its alpha.
  *
  * @description
- * The function multiplies `r`, `g`, and `b` by `a`. The alpha channel
+ * The function multiplies `c1`, `c2` and `c3` by `alpha`. The alpha channel
  * is unchanged. The result is in the same space as the input.
  *
  * Premultiplied colors are common in image formats and in GPU texture
@@ -135,8 +135,8 @@ export function under<Src extends ColorSpaceDef<string>, Dst extends ColorSpaceD
  * premultiply(make(sRGB, 1, 0, 0, 0.5));  // sRGB(0.5, 0, 0, 0.5)
  */
 export function premultiply<S extends ColorSpaceDef<string>>(color: ColorValue<S>): ColorValue<S> {
-  const a = color.a;
-  return make(color._space, color.r * a, color.g * a, color.b * a, a);
+  const a = color.alpha;
+  return make(color._space, color.c1 * a, color.c2 * a, color.c3 * a, a);
 }
 
 /**
@@ -144,7 +144,7 @@ export function premultiply<S extends ColorSpaceDef<string>>(color: ColorValue<S
  * Undo premultiplication on the color channels of a color.
  *
  * @description
- * The function divides `r`, `g`, and `b` by `a`. The alpha channel is
+ * The function divides `c1`, `c2` and `c3` by `alpha`. The alpha channel is
  * unchanged. When alpha is 0, the function returns the input unchanged.
  * The color channels of a fully transparent premultiplied color are
  * undefined and stay undefined.
@@ -161,8 +161,8 @@ export function premultiply<S extends ColorSpaceDef<string>>(color: ColorValue<S
 export function unpremultiply<S extends ColorSpaceDef<string>>(
   color: ColorValue<S>,
 ): ColorValue<S> {
-  const a = color.a;
+  const a = color.alpha;
   if (a === 0) return color;
   const inv = 1 / a;
-  return make(color._space, color.r * inv, color.g * inv, color.b * inv, a);
+  return make(color._space, color.c1 * inv, color.c2 * inv, color.c3 * inv, a);
 }

@@ -19,32 +19,32 @@
 
 import { type ColorValue, make } from '../convert';
 import {
-  type AnyColorSpace,
-  type ColorSpaceDef,
-  ACES_AP0,
-  ACES_AP1,
-  ACEScc,
-  ACEScct,
-  CIE_Lab,
-  CIE_LCh,
-  Display_P3,
-  HLG_Rec2020,
-  HSL,
-  HSV,
-  HWB,
-  ICtCp,
-  Jzazbz,
-  JzCzHz,
-  Linear_P3,
-  Linear_Rec2020,
-  Linear_sRGB,
-  LogC3,
-  OKLab,
-  OKLCh,
-  PQ_Rec2020,
-  sRGB,
-  XYZ_D65,
-  YCbCr,
+    type AnyColorSpace,
+    type ColorSpaceDef,
+    ACES_AP0,
+    ACES_AP1,
+    ACEScc,
+    ACEScct,
+    CIE_Lab,
+    CIE_LCh,
+    Display_P3,
+    HLG_Rec2020,
+    HSL,
+    HSV,
+    HWB,
+    ICtCp,
+    Jzazbz,
+    JzCzHz,
+    Linear_P3,
+    Linear_Rec2020,
+    Linear_sRGB,
+    LogC3,
+    OKLab,
+    OKLCh,
+    PQ_Rec2020,
+    sRGB,
+    XYZ_D65,
+    YCbCr,
 } from '../space';
 import { type Palette, type SerializedColor } from './types';
 
@@ -158,7 +158,7 @@ export function knownSpaceIds(): ReadonlyArray<string> {
  * // ['sRGB', 1, 0, 0, 1]
  */
 export function packColor<S extends ColorSpaceDef<string>>(color: ColorValue<S>): SerializedColor {
-  return [color._space.id, color.r, color.g, color.b, color.a];
+  return [color._space.id, color.c1, color.c2, color.c3, color.alpha];
 }
 
 /**

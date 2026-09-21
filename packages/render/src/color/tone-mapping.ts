@@ -120,9 +120,9 @@ export function toneMap<S extends ColorSpaceDef<string>>(
   const lin = convert(color, Linear_Rec2020);
   const gain = 2 ** exposure;
 
-  const r = applyOperator(operator, lin.r * gain, peak, target, white);
-  const g = applyOperator(operator, lin.g * gain, peak, target, white);
-  const b = applyOperator(operator, lin.b * gain, peak, target, white);
+  const r = applyOperator(operator, lin.c1 * gain, peak, target, white);
+  const g = applyOperator(operator, lin.c2 * gain, peak, target, white);
+  const b = applyOperator(operator, lin.c3 * gain, peak, target, white);
 
   // Clamp to 0 to 1 in linear Rec.2020 before encoding.
   const out = make(
@@ -130,7 +130,7 @@ export function toneMap<S extends ColorSpaceDef<string>>(
     Math.max(0, Math.min(1, r)),
     Math.max(0, Math.min(1, g)),
     Math.max(0, Math.min(1, b)),
-    color.a,
+    color.alpha,
   );
   return convert(out, sRGB);
 }

@@ -201,11 +201,11 @@ export function adapt<S extends ColorSpaceDef<string>>(
   ];
 
   const xyz = convert(color, XYZ_D65);
-  const cone = mulMat3(m, xyz.r, xyz.g, xyz.b);
+  const cone = mulMat3(m, xyz.c1, xyz.c2, xyz.c3);
   const scaled = mulMat3(scale, cone[0], cone[1], cone[2]);
   const back = mulMat3(inv, scaled[0], scaled[1], scaled[2]);
 
-  const outXyz = make(XYZ_D65, back[0], back[1], back[2], color.a);
+  const outXyz = make(XYZ_D65, back[0], back[1], back[2], color.alpha);
   return convert(outXyz, color._space);
 }
 

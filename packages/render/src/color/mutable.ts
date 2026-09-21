@@ -34,7 +34,7 @@
  *
  * const red = make(sRGB, 1, 0, 0);
  * const m = toMutable(red);
- * m.g = 0.5;                      // Allowed. The type is mutable.
+ * m.c2 = 0.5;                      // Allowed. The type is mutable.
  * const back = toImmutable(m);
  *
  * @author MathAid
@@ -66,18 +66,18 @@ import { type ColorSpaceDef } from './space';
  * import { make, sRGB } from './index.js';
  *
  * const m: MutableColor<typeof sRGB> = toMutable(make(sRGB, 1, 0, 0));
- * m.r = 0.5;
- * m.g = 0.25;
+ * m.c1 = 0.5;
+ * m.c2 = 0.25;
  */
 export interface MutableColor<S extends ColorSpaceDef<string>> {
   /** First channel. R, L, or X. Writable. */
-  r: number;
+  c1: number;
   /** Second channel. G, a, or Y. Writable. */
-  g: number;
+  c2: number;
   /** Third channel. B, b, or Z. Writable. */
-  b: number;
+  c3: number;
   /** Alpha. Always linear, 0 to 1. Writable. */
-  a: number;
+  alpha: number;
   /** The space object. Read-only. Do not reassign. */
   readonly _space: S;
 }
@@ -103,11 +103,11 @@ export interface MutableColor<S extends ColorSpaceDef<string>> {
  * @example
  * const src = make(sRGB, 0.5, 0.5, 0.5);
  * const m = toMutable(src);
- * m.r = 1;
- * // src.r is still 0.5
+ * m.c1 = 1;
+ * // src.c1 is still 0.5
  */
 export function toMutable<S extends ColorSpaceDef<string>>(color: ColorValue<S>): MutableColor<S> {
-  return { r: color.r, g: color.g, b: color.b, a: color.a, _space: color._space };
+  return { c1: color.c1, c2: color.c2, c3: color.c3, alpha: color.alpha, _space: color._space };
 }
 
 /**
@@ -127,11 +127,11 @@ export function toMutable<S extends ColorSpaceDef<string>>(color: ColorValue<S>)
  * @example
  * const m = toMutable(make(sRGB, 0.5, 0.5, 0.5));
  * const snap = toImmutable(m);
- * m.r = 1;
- * // snap.r is still 0.5
+ * m.c1 = 1;
+ * // snap.c1 is still 0.5
  */
 export function toImmutable<S extends ColorSpaceDef<string>>(
   color: MutableColor<S>,
 ): ColorValue<S> {
-  return { r: color.r, g: color.g, b: color.b, a: color.a, _space: color._space };
+  return { c1: color.c1, c2: color.c2, c3: color.c3, alpha: color.alpha, _space: color._space };
 }

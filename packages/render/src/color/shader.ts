@@ -26,10 +26,10 @@
 
 import { type ColorValue, convert } from './convert';
 import {
-  type ColorSpaceDef,
-  Linear_Rec2020,
-  Linear_sRGB,
-  sRGB,
+    type ColorSpaceDef,
+    Linear_Rec2020,
+    Linear_sRGB,
+    sRGB,
 } from './space';
 
 // -----------------------------------------------------------------
@@ -104,10 +104,10 @@ export function toShader<S extends ColorSpaceDef<string>>(
   const outSpace = pickSpace(opts.space ?? 'Linear_sRGB');
   const c = convert(color, outSpace);
   const name = sanitizeIdentifier(opts.name ?? outSpace.id);
-  const r = formatNumber(c.r);
-  const g = formatNumber(c.g);
-  const b = formatNumber(c.b);
-  const a = formatNumber(c.a);
+  const r = formatNumber(c.c1);
+  const g = formatNumber(c.c2);
+  const b = formatNumber(c.c3);
+  const a = formatNumber(c.alpha);
 
   switch (language) {
     case 'hlsl':

@@ -24,6 +24,8 @@
 import { type ColorValue, convert, format, isInRange } from './convert';
 import { type ColorSpaceDef, sRGB } from './space';
 
+declare const process: any;
+
 // -----------------------------------------------------------------
 //  Environment detection
 // -----------------------------------------------------------------
@@ -57,7 +59,7 @@ const IS_PRODUCTION: boolean =
 const warnedKeys = new Set<string>();
 
 function cacheKey<S extends ColorSpaceDef<string>>(color: ColorValue<S>): string {
-  return `${color._space.id}:${color.r},${color.g},${color.b},${color.a}`;
+  return `${color._space.id}:${color.c1},${color.c2},${color.c3},${color.alpha}`;
 }
 
 // -----------------------------------------------------------------
@@ -146,10 +148,10 @@ export function debugFormat<S extends ColorSpaceDef<string>>(
     return `  ${label}: ${v.toFixed(4)} [${min}, ${max}] ${status}`;
   };
 
-  lines.push(channel('c1', color.r, ranges[0].min, ranges[0].max));
-  lines.push(channel('c2', color.g, ranges[1].min, ranges[1].max));
-  lines.push(channel('c3', color.b, ranges[2].min, ranges[2].max));
-  lines.push(channel('alpha', color.a, 0, 1));
+  lines.push(channel('c1', color.c1, ranges[0].min, ranges[0].max));
+  lines.push(channel('c2', color.c2, ranges[1].min, ranges[1].max));
+  lines.push(channel('c3', color.c3, ranges[2].min, ranges[2].max));
+  lines.push(channel('alpha', color.alpha, 0, 1));
 
   const srgb = convert(color, sRGB);
   const inSRGB = isInRange(srgb);

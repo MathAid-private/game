@@ -70,9 +70,9 @@ export function convertBatchFast<
 
   for (let i = 0; i < colors.length; i++) {
     const c = colors[i]!;
-    const [X, Y, Z] = toXYZ(src, c.r, c.g, c.b);
+    const [X, Y, Z] = toXYZ(src, c.c1, c.c2, c.c3);
     const [r, g, b] = fromXYZ(dst, X, Y, Z);
-    out[i] = make(dst, r, g, b, c.a);
+    out[i] = make(dst, r, g, b, c.alpha);
   }
 
   return out;

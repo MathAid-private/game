@@ -41,7 +41,7 @@ import { type ColorSpaceDef } from './space';
  * Pack an array of colors into a `Float32Array`.
  *
  * @description
- * The function writes four floats per color. The order is R, G, B, A.
+ * The function writes four floats per color. The order is C1, C2, C3, ALPHA.
  * The values are copied as-is. No clamping and no scaling.
  *
  * The array length is `colors.length * 4`.
@@ -64,10 +64,10 @@ export function toFloat32Array<S extends ColorSpaceDef<string>>(
   for (let i = 0; i < colors.length; i++) {
     const c = colors[i]!;
     const o = i * 4;
-    out[o] = c.r;
-    out[o + 1] = c.g;
-    out[o + 2] = c.b;
-    out[o + 3] = c.a;
+    out[o] = c.c1;
+    out[o + 1] = c.c2;
+    out[o + 2] = c.c3;
+    out[o + 3] = c.alpha;
   }
   return out;
 }
@@ -77,7 +77,7 @@ export function toFloat32Array<S extends ColorSpaceDef<string>>(
  * Unpack a `Float32Array` into an array of colors.
  *
  * @description
- * The function reads four floats per color. The order is R, G, B, A.
+ * The function reads four floats per color. The order is C1, C2, C3, ALPHA.
  * The input length must be a multiple of 4.
  *
  * @template S - The target color space type.
@@ -118,7 +118,7 @@ export function fromFloat32Array<S extends ColorSpaceDef<string>>(
  * Pack an array of colors into a `Uint8Array`.
  *
  * @description
- * The function writes four bytes per color. The order is R, G, B, A.
+ * The function writes four bytes per color. The order is C1, C2, C3, ALPHA.
  * Values are clamped to 0 to 1. Then they are scaled to 0 to 255 with
  * `Math.round`.
  *
@@ -142,10 +142,10 @@ export function toUint8Array<S extends ColorSpaceDef<string>>(
   for (let i = 0; i < colors.length; i++) {
     const c = colors[i]!;
     const o = i * 4;
-    out[o] = toByte(c.r);
-    out[o + 1] = toByte(c.g);
-    out[o + 2] = toByte(c.b);
-    out[o + 3] = toByte(c.a);
+    out[o] = toByte(c.c1);
+    out[o + 1] = toByte(c.c2);
+    out[o + 2] = toByte(c.c3);
+    out[o + 3] = toByte(c.alpha);
   }
   return out;
 }
@@ -155,7 +155,7 @@ export function toUint8Array<S extends ColorSpaceDef<string>>(
  * Unpack a `Uint8Array` into an array of colors.
  *
  * @description
- * The function reads four bytes per color. The order is R, G, B, A.
+ * The function reads four bytes per color. The order is C1, C2, C3, ALPHA.
  * Each byte is divided by 255 to give a 0 to 1 value. The input length
  * must be a multiple of 4.
  *

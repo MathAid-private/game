@@ -72,9 +72,9 @@ import { type ColorSpaceDef, Linear_sRGB, sRGB } from './space';
  */
 export function luminance<S extends ColorSpaceDef<string>>(color: ColorValue<S>): number {
   const lin = convert(color, Linear_sRGB);
-  const r = Math.max(0, Math.min(1, lin.r));
-  const g = Math.max(0, Math.min(1, lin.g));
-  const b = Math.max(0, Math.min(1, lin.b));
+  const r = Math.max(0, Math.min(1, lin.c1));
+  const g = Math.max(0, Math.min(1, lin.c2));
+  const b = Math.max(0, Math.min(1, lin.c3));
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 

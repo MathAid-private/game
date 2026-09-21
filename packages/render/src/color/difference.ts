@@ -24,7 +24,7 @@
  * for gamut mapping and for real-time checks. Use `deltaE76` for old
  * tooling compatibility.
  *
- * @see {@link http://www2.ece.rochester.edu/~gsharma/ciede2000/} Sharma CIEDE2000 reference
+ * @see {@link http://www2.ece.c1ochester.edu/~gsharma/ciede2000/} Sharma CIEDE2000 reference
  *
  * @author MathAid
  */
@@ -65,7 +65,7 @@ export function deltaEOK<A extends ColorSpaceDef<string>, B extends ColorSpaceDe
 ): number {
   const la = convert(a, OKLab);
   const lb = convert(b, OKLab);
-  return Math.sqrt((la.r - lb.r) ** 2 + (la.g - lb.g) ** 2 + (la.b - lb.b) ** 2);
+  return Math.sqrt((la.c1 - lb.c1) ** 2 + (la.c2 - lb.c2) ** 2 + (la.c3 - lb.c3) ** 2);
 }
 
 // -----------------------------------------------------------------
@@ -100,7 +100,7 @@ export function deltaE76<A extends ColorSpaceDef<string>, B extends ColorSpaceDe
 ): number {
   const la = convert(a, CIE_Lab);
   const lb = convert(b, CIE_Lab);
-  return Math.sqrt((la.r - lb.r) ** 2 + (la.g - lb.g) ** 2 + (la.b - lb.b) ** 2);
+  return Math.sqrt((la.c1 - lb.c1) ** 2 + (la.c2 - lb.c2) ** 2 + (la.c3 - lb.c3) ** 2);
 }
 
 // -----------------------------------------------------------------
@@ -137,7 +137,7 @@ export function deltaE76<A extends ColorSpaceDef<string>, B extends ColorSpaceDe
  * deltaE2000(make(sRGB, 1, 0, 0), make(sRGB, 1, 0, 0));  // 0
  * deltaE2000(make(sRGB, 0.5, 0.5, 0.5), make(sRGB, 0.51, 0.5, 0.5));  // small
  *
- * @see {@link http://www2.ece.rochester.edu/~gsharma/ciede2000/} Sharma test data
+ * @see {@link http://www2.ece.c1ochester.edu/~gsharma/ciede2000/} Sharma test data
  */
 export function deltaE2000<A extends ColorSpaceDef<string>, B extends ColorSpaceDef<string>>(
   a: ColorValue<A>,
@@ -149,12 +149,12 @@ export function deltaE2000<A extends ColorSpaceDef<string>, B extends ColorSpace
   const lab1 = convert(a, CIE_Lab);
   const lab2 = convert(b, CIE_Lab);
 
-  const L1 = lab1.r;
-  const a1 = lab1.g;
-  const b1 = lab1.b;
-  const L2 = lab2.r;
-  const a2 = lab2.g;
-  const b2 = lab2.b;
+  const L1 = lab1.c1;
+  const a1 = lab1.c2;
+  const b1 = lab1.c3;
+  const L2 = lab2.c1;
+  const a2 = lab2.c2;
+  const b2 = lab2.c3;
 
   const C1 = Math.sqrt(a1 * a1 + b1 * b1);
   const C2 = Math.sqrt(a2 * a2 + b2 * b2);
@@ -271,8 +271,8 @@ export function deltaEITP<A extends ColorSpaceDef<string>, B extends ColorSpaceD
 ): number {
   const ia = convert(a, ICtCp);
   const ib = convert(b, ICtCp);
-  const dI = ia.r - ib.r;
-  const dT = ia.g - ib.g;
-  const dP = ia.b - ib.b;
+  const dI = ia.c1 - ib.c1;
+  const dT = ia.c2 - ib.c2;
+  const dP = ia.c3 - ib.c3;
   return 720 * Math.sqrt(dI * dI + 0.25 * dT * dT + dP * dP);
 }

@@ -16,7 +16,7 @@
  *      |       |   |   +------- third channel
  *      |       |   +----------- second channel
  *      |       +--------------- first channel
- *      +----------------------- space ID, e.g. "sRGB"
+ *      +----------------------- space ID, e.c2. "sRGB"
  * ```
  *
  * A palette groups colors by their space. A gradient carries a stop

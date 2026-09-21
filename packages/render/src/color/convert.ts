@@ -1,18 +1,24 @@
 /**
- * @fileoverview Conversion engine. The `ColorValue<S>` type and the
- * `convert()` function.
+ * @fileoverview Conversion engine. The `ColorValue<S>` type, the
+ * `ColorTuple<S>` view, and the `convert()` function.
  *
  * @summary
- * The central type of the library. A phantom-typed color value that
- * carries its color space at the type level. Plus a pure `convert()`
- * function that transforms between any two supported spaces.
+ * The central types of the library. A phantom-typed color value that
+ * carries its color space at the type level. A tuple projection for
+ * GPU boundaries. Plus a pure `convert()` function that transforms
+ * between any two supported spaces.
  *
  * @description
- * `ColorValue<S>` is a plain object with fields r, g, b, a. The object
- * also carries a phantom type parameter S. S is a `ColorSpaceDef`. The
- * tag has no extra runtime cost. TypeScript uses the tag to stop you
- * from passing a `ColorValue<typeof sRGB>` where a
- * `ColorValue<typeof Linear_sRGB>` is expected.
+ * `ColorValue<S>` is a plain object with fields c1, c2, c3, alpha.
+ * The object also carries a phantom type parameter S. S is a
+ * `ColorSpaceDef`. TypeScript uses the tag to stop you from passing
+ * a `ColorValue<typeof sRGB>` where a `ColorValue<typeof Linear_sRGB>`
+ * is expected.
+ *
+ * `ColorTuple<S>` is a readonly 4-tuple. It is a view for GPU
+ * boundaries, JSON, and structured data. It carries a type-only brand.
+ * It has no runtime space tag. Every public function that accepts a
+ * tuple converts it to a `ColorValue` at the top of the function.
  *
  * Silent space mismatches are a common source of color-rendering bugs.
  * Tracking the space in the type system turns that bug into a
@@ -27,8 +33,9 @@
  *   dest linear     -->  [OETF]  -->  dest encoded
  * ```
  *
- * OKLab and OKLCh use a non-matrix path through cube-root LMS. The
- * engine wires that path in as a special case.
+ * OKLab, OKLCh, ICtCp, Jzazbz, JzCzHz, and the cylindrical or Lab
+ * spaces use non-matrix paths. The engine wires them in as special
+ * cases.
  *
  * @example
  * import { make, convert } from './convert.js';
@@ -47,16 +54,16 @@
  * @author MathAid
  */
 import {
+  type ColorSpaceDef,
+  type Mat3,
   CIE_Lab,
   CIE_LCh,
-  type ColorSpaceDef,
   HSL,
   HSV,
   HWB,
   ICtCp,
   Jzazbz,
   JzCzHz,
-  type Mat3,
   OKLab,
   OKLCh,
   sRGB,
@@ -65,7 +72,22 @@ import {
 } from './space';
 
 // -----------------------------------------------------------------
-//  Core type
+//  Brand
+// -----------------------------------------------------------------
+
+/**
+ * @summary
+ * A type-only brand for `ColorTuple<S>`.
+ *
+ * @description
+ * The brand exists only in the type system. It is never set at
+ * runtime. Do not read it. Do not write it. Use the `from` argument
+ * on the consuming function to state the space.
+ */
+declare const colorTupleBrand: unique symbol;
+
+// -----------------------------------------------------------------
+//  Core types
 // -----------------------------------------------------------------
 
 /**
@@ -73,35 +95,63 @@ import {
  * A color value in a specific logical color space `S`.
  *
  * @description
- * Channels are floating-point numbers. The natural range depends on the
- * space. Common ranges are 0 to 1 for SDR encoded spaces, unbounded for
- * linear HDR spaces, -0.5 to 0.5 for OKLab a and b, and any angle for
- * OKLCh H.
+ * Channels are floating-point numbers. The natural range depends on
+ * the space. Use `_space.descriptor.channelRanges` for the legal
+ * range of each channel. Use `_space.descriptor.channelNames` for the
+ * labels.
  *
- * The `_space` field carries the phantom type at runtime. `make` writes
- * it. `convert` reads it. Application code should not read it directly.
- * Use `color._space.descriptor` if you need metadata.
+ * The `_space` field carries the phantom type at runtime. `make`
+ * writes it. `convert` reads it. Do not read it in application code.
  *
  * @template S - The color space type. A `ColorSpaceDef<string>`.
  *
  * @example
- * import { sRGB, make } from './index.js';
+ * import { sRGB, make } from '@games/render';
  *
  * const red = make(sRGB, 1, 0, 0);
- * // red._space === sRGB
+ * // red.c1 === 1, red.alpha === 1, red._space === sRGB
  */
 export interface ColorValue<S extends ColorSpaceDef<string>> {
-  /** First channel. R, L, or X, depending on the space. */
-  readonly r: number;
-  /** Second channel. G, a, or Y, depending on the space. */
-  readonly g: number;
-  /** Third channel. B, b, or Z, depending on the space. */
-  readonly b: number;
+  /** First channel. R, L, X, H, or Y, depending on the space. */
+  readonly c1: number;
+  /** Second channel. G, a, Y, S, or Cb, depending on the space. */
+  readonly c2: number;
+  /** Third channel. B, b, Z, L, or Cr, depending on the space. */
+  readonly c3: number;
   /** Alpha. Always linear. Range 0 to 1. */
-  readonly a: number;
+  readonly alpha: number;
   /** The space object. Written by `make`. Read by `convert`. */
   readonly _space: S;
 }
+
+/**
+ * @summary
+ * A readonly 4-tuple projection of a `ColorValue<S>`.
+ *
+ * @description
+ * The tuple is a view for GPU boundaries, JSON, and structured data.
+ * It is not the canonical representation. Every public function that
+ * accepts a tuple converts it to a `ColorValue` at the top of the
+ * function.
+ *
+ * The brand is type-only. It has no runtime presence. The tuple does
+ * not survive `[...c]`, `c.slice()`, `structuredClone(c)`, or a JSON
+ * round-trip with the space tag intact. Use `fromTuple(tuple, space)`
+ * to attach the space when you need a `ColorValue`.
+ *
+ * @template S - The color space type.
+ *
+ * @example
+ * import { type ColorTuple, sRGB } from '@games/render';
+ *
+ * const red: ColorTuple<typeof sRGB> = [1, 0, 0, 1];
+ */
+export type ColorTuple<S extends ColorSpaceDef<string>> = readonly [
+  c1: number,
+  c2: number,
+  c3: number,
+  alpha: number,
+] & { readonly [colorTupleBrand]?: S };
 
 // -----------------------------------------------------------------
 //  Constructors
@@ -112,31 +162,141 @@ export interface ColorValue<S extends ColorSpaceDef<string>> {
  * Build a `ColorValue` in space `S`.
  *
  * @description
- * This is the only recommended way to create a color value. The
- * function writes the `_space` field, which the conversion engine reads.
+ * This is the recommended way to create a color value. The function
+ * writes the `_space` field, which the conversion engine reads.
  *
  * @template S - The color space type.
- *
- * @param space - The color space object, for example `sRGB` or `OKLab`.
- * @param r - First channel. R, L, or X.
- * @param g - Second channel. G, a, or Y.
- * @param b - Third channel. B, b, or Z.
- * @param a - Alpha, always linear, 0 to 1. Defaults to 1.
+ * @param space - The color space object.
+ * @param c1 - First channel. E.c2, R (RGB), L (Lab), or X (XYZ)
+ * @param c2 - Second channel. E.c2, G (RGB), a (Lab), or Y (XYZ)
+ * @param c3 - Third channel. E.c2, B (RGB), b (Lab), or Z (XYZ)
+ * @param alpha - Alpha, always linear, 0 to 1. Defaults to 1.
  * @returns A new `ColorValue<S>`.
  *
  * @example
- * const red   = make(sRGB, 1, 0, 0);
- * const lab   = make(OKLab, 0.6, 0.2, 0.1);
- * const faint = make(sRGB, 1, 0, 0, 0.5);
+ * const red = make(sRGB, 1, 0, 0);
+ * const lab = make(OKLab, 0.6, 0.2, 0.1);
  */
 export function make<S extends ColorSpaceDef<string>>(
   space: S,
-  r: number,
-  g: number,
-  b: number,
-  a = 1,
+  c1: number,
+  c2: number,
+  c3: number,
+  alpha = 1,
 ): ColorValue<S> {
-  return { r, g, b, a, _space: space };
+  return { c1, c2, c3, alpha, _space: space };
+}
+
+/**
+ * @summary
+ * Build a `ColorTuple<S>` from channel values.
+ *
+ * @description
+ * The tuple is a view. Use it at GPU boundaries, in JSON payloads, or
+ * in any context that wants a plain array. The `space` argument binds
+ * the type parameter. It is not stored.
+ *
+ * @template S - The color space type.
+ * @param _space - The color space.
+ * @param c1 - First channel.
+ * @param c2 - Second channel.
+ * @param c3 - Third channel.
+ * @param alpha - Alpha. Defaults to 1.
+ * @returns A new `ColorTuple<S>`.
+ *
+ * @example
+ * const red = makeTuple(sRGB, 1, 0, 0);
+ * // red is [1, 0, 0, 1]
+ */
+export function makeTuple<S extends ColorSpaceDef<string>>(
+  _space: S,
+  c1: number,
+  c2: number,
+  c3: number,
+  alpha = 1,
+): ColorTuple<S> {
+  // return Object.assign<ColorTuple<S>, Partial<ColorTuple<S>>>([c1, c2, c3, alpha], {
+  //   [colorTupleBrand]: space,
+  // });
+  return [c1, c2, c3, alpha] as ColorTuple<S>;
+}
+
+/**
+ * @summary
+ * Project a `ColorValue<S>` to a `ColorTuple<S>`.
+ *
+ * @description
+ * The function returns a fresh array. The array is a plain tuple with
+ * no runtime tag. Mutations to the result do not affect the input.
+ *
+ * @template S - The color space type.
+ * @param color - The source color.
+ * @returns A new `ColorTuple<S>`.
+ *
+ * @example
+ * const c = make(sRGB, 1, 0, 0);
+ * const t = asTuple(c);
+ * // t is [1, 0, 0, 1]
+ */
+export function asTuple<S extends ColorSpaceDef<string>>(color: ColorValue<S>): ColorTuple<S> {
+  const { _space: space, c1, c2, c3, alpha } = color;
+  return makeTuple(space, c1, c2, c3, alpha);
+}
+
+/**
+ * @summary
+ * Lift a `ColorTuple<S>` to a `ColorValue<S>`.
+ *
+ * @description
+ * The function wraps the tuple in the object shape. The space is
+ * taken from the `space` argument. The tuple cannot carry the space
+ * at runtime. The caller must state it.
+ *
+ * @template S - The color space type.
+ * @param tuple - The source tuple.
+ * @param space - The color space. Becomes `_space` on the result.
+ * @returns A new `ColorValue<S>`.
+ *
+ * @example
+ * const t: ColorTuple<typeof sRGB> = [1, 0, 0, 1];
+ * const c = fromTuple(t, sRGB);
+ * // c._space === sRGB
+ */
+export function fromTuple<S extends ColorSpaceDef<string>>(
+  tuple: ColorTuple<S>,
+  space: S,
+): ColorValue<S> {
+  return make(space, tuple[0], tuple[1], tuple[2]);
+}
+
+/**
+ * @summary
+ * Type guard. Returns true when the value is a `ColorValue`.
+ *
+ * @description
+ * The check reads the `_space` field. That field is the runtime tag
+ * that tuples cannot carry. This is the predicate that a tuple-based
+ * representation would fail without an object conversion.
+ *
+ * @param value - The value to test.
+ * @returns True when the value is a `ColorValue`.
+ *
+ * @example
+ * isColorValue(make(sRGB, 1, 0, 0));     // true
+ * isColorValue([1, 0, 0, 1]);            // false
+ */
+export function isColorValue(
+  value: unknown,
+): value is ColorValue<ColorSpaceDef<string>> {
+  if (value === null || typeof value !== 'object') return false;
+  if (Array.isArray(value)) return false;
+  const v = value as { _space?: unknown };
+  return (
+    typeof v._space === 'object' &&
+    v._space !== null &&
+    'id' in v._space &&
+    'descriptor' in v._space
+  );
 }
 
 /**
@@ -457,7 +617,7 @@ function toXYZ(
     return mulMat3(M_LMS_to_XYZ_ICtCp, L, M, S);
   }
 
-    // Jzazbz to XYZ D65.
+  // Jzazbz to XYZ D65.
   if (id === Jzazbz.id) {
     // Undo the Jz offset and scale.
     const Jzp = (r + JZAZBZ_D0) / (1 + JZAZBZ_D - JZAZBZ_D * (r + JZAZBZ_D0));
@@ -571,7 +731,7 @@ const JZAZBZ_G = 0.66;
 /** Jzazbz reference luminance in cd/m^2. */
 const JZAZBZ_L_REF = 10000;
 /** Jzazbz PQ-like p exponent. */
-const JZAZBZ_P = 1.7 * 2523 / 2 ** 5;
+const JZAZBZ_P = (1.7 * 2523) / 2 ** 5;
 /** Jzazbz PQ-like c1 constant. */
 const JZAZBZ_C1 = 3424 / 2 ** 12;
 /** Jzazbz PQ-like c2 constant. */
@@ -587,30 +747,25 @@ const JZAZBZ_D0 = 1.6295499532821566e-11;
 
 /** XYZ D65 to LMS in the Jzazbz pre-adaptation step. */
 const M_XYZ_TO_LMS_JZAZBZ: Mat3 = [
-   0.41478972, 0.57999900, 0.01464800,
-  -0.20151000, 1.12064900, 0.05310080,
-  -0.01660080, 0.26480000, 0.66847990,
+  0.41478972, 0.579999, 0.014648, -0.20151, 1.120649, 0.0531008, -0.0166008, 0.2648, 0.6684799,
 ];
 
 /** The inverse of `M_XYZ_TO_LMS_JZAZBZ`. */
 const M_LMS_TO_XYZ_JZAZBZ: Mat3 = [
-   1.9242264357876067, -1.0047923125953657,  0.037651404030618,
-   0.3503167620949991,  0.7264811939316552, -0.0653844229480850,
-  -0.0909828109828475, -0.3127282905230739,  1.5227665613052603,
+  1.9242264357876067, -1.0047923125953657, 0.037651404030618, 0.3503167620949991,
+  0.7264811939316552, -0.065384422948085, -0.0909828109828475, -0.3127282905230739,
+  1.5227665613052603,
 ];
 
 /** Izazbz to Jzazbz opponent matrix. */
 const M_IZAZBZ_TO_JZAZBZ: Mat3 = [
-  0.50000000,  0.50000000,  0.00000000,
-  3.52400000, -4.06670800,  0.54270800,
-  0.19907600,  1.09679900, -1.29587500,
+  0.5, 0.5, 0.0, 3.524, -4.066708, 0.542708, 0.199076, 1.096799, -1.295875,
 ];
 
 /** The inverse of `M_IZAZBZ_TO_JZAZBZ`. */
 const M_JZAZBZ_TO_IZAZBZ: Mat3 = [
-  1.0,                  0.1386050432715393,   0.0580473161561189,
-  1.0,                 -0.1386050432715393,  -0.0580473161561189,
-  1.0,                 -0.0960192420263189,  -0.8118918960560388,
+  1.0, 0.1386050432715393, 0.0580473161561189, 1.0, -0.1386050432715393, -0.0580473161561189, 1.0,
+  -0.0960192420263189, -0.8118918960560388,
 ];
 
 /**
@@ -841,44 +996,75 @@ const M_ICtCp_to_LMS: Mat3 = [
  * Convert a color from its source space to a destination space.
  *
  * @description
- * All conversions route through CIE XYZ D65.
+ * All conversions route through CIE XYZ D65. Alpha is copied
+ * unchanged. When the source and destination are the same space, the
+ * input is returned as a `ColorValue`.
  *
- * ```text
- *   source --> XYZ D65 --> destination
- * ```
+ * @note
+ * This function accepts a `ColorTuple<Src>` in addition to a
+ * `ColorValue<Src>`. The tuple overload converts the tuple to a
+ * `ColorValue` at the top of the function. The rest of the function
+ * works on the object shape. The conversion is required for three
+ * reasons.
  *
- * Alpha is copied unchanged. Alpha is always linear. If the source and
- * destination are the same space, the input object is returned as-is.
+ *   1. The object carries the `_space` field. The tuple cannot. The
+ *      function reads `_space` to know the source space without a
+ *      separate `from` argument.
+ *   2. TypeScript's structural typing and type predicates are
+ *      reliable on objects. A tuple loses the space tag on `[...c]`,
+ *      `c.slice()`, `structuredClone(c)`, and `JSON.parse(JSON.stringify(c))`.
+ *      The object loses nothing.
+ *   3. A tuple-based tag would need a global `WeakMap<tuple, space>`.
+ *      That map is a leak risk and a performance cost. The object
+ *      shape avoids it entirely.
  *
  * @template Src - The source space type.
  * @template Dst - The destination space type.
- *
- * @param color - The source color value.
- * @param dst - The destination space object.
+ * @param color - The source color. Object or tuple.
+ * @param a - The destination space, or the source space when `color`
+ *   is a tuple.
+ * @param b - The destination space when `color` is a tuple.
  * @returns A new `ColorValue<Dst>`.
  *
  * @example
- * const linear = convert(make(sRGB, 0.5, 0.2, 0.8), Linear_sRGB);
- * const lab    = convert(linear, OKLab);
- *
- * @example
- * // A no-op conversion returns the same object.
- * const same = convert(make(sRGB, 0.5, 0.2, 0.8), sRGB);
+ * convert(make(sRGB, 1, 0, 0), Linear_sRGB);
+ * convert(makeTuple(sRGB, 1, 0, 0), sRGB, Linear_sRGB);
  */
 export function convert<Src extends ColorSpaceDef<string>, Dst extends ColorSpaceDef<string>>(
   color: ColorValue<Src>,
-  dst: Dst,
+  to: Dst,
+): ColorValue<Dst>;
+export function convert<Src extends ColorSpaceDef<string>, Dst extends ColorSpaceDef<string>>(
+  color: ColorTuple<Src>,
+  from: Src,
+  to: Dst,
+): ColorValue<Dst>;
+export function convert<Src extends ColorSpaceDef<string>, Dst extends ColorSpaceDef<string>>(
+  color: ColorValue<Src> | ColorTuple<Src>,
+  a: Src | Dst,
+  b?: Dst,
 ): ColorValue<Dst> {
-  const src = color._space;
+  let from: Src;
+  let to: Dst;
+  let c: ColorValue<Src>;
 
-  // Optimise no-op conversions.
-  if (src.id === dst.id) {
-    return color as unknown as ColorValue<Dst>;
+  if (b === undefined) {
+    c = color as ColorValue<Src>;
+    from = c._space;
+    to = a as Dst;
+  } else {
+    from = a as Src;
+    to = b;
+    c = fromTuple(color as ColorTuple<Src>, from);
   }
 
-  const [X, Y, Z] = toXYZ(src, color.r, color.g, color.b);
-  const [r, g, b] = fromXYZ(dst, X, Y, Z);
-  return make(dst, r, g, b, color.a);
+  if (from.id === to.id) {
+    return c as unknown as ColorValue<Dst>;
+  }
+
+  const [X, Y, Z] = toXYZ(from, c.c1, c.c2, c.c3);
+  const [c1, c2, c3] = fromXYZ(to, X, Y, Z);
+  return make(to, c1, c2, c3, c.alpha);
 }
 
 /**
@@ -899,13 +1085,15 @@ export function convert<Src extends ColorSpaceDef<string>, Dst extends ColorSpac
  * const c = make(sRGB, 1.5, -0.2, 0.5);
  * clampToRange(c); // { r: 1, g: 0, b: 0.5, a: 1 }
  */
-export function clampToRange<S extends ColorSpaceDef<string>>(color: ColorValue<S>): ColorValue<S> {
+export function clampToRange<S extends ColorSpaceDef<string>>(
+  color: ColorValue<S>,
+): ColorValue<S> {
   const [rr, rg, rb] = color._space.descriptor.channelRanges;
-  const cr = Math.max(rr.min, Math.min(rr.max, color.r));
-  const cg = Math.max(rg.min, Math.min(rg.max, color.g));
-  const cb = Math.max(rb.min, Math.min(rb.max, color.b));
-  const ca = Math.max(0, Math.min(1, color.a));
-  return make(color._space, cr, cg, cb, ca);
+  const cc1 = Math.max(rr.min, Math.min(rr.max, color.c1));
+  const cc2 = Math.max(rg.min, Math.min(rg.max, color.c2));
+  const cc3 = Math.max(rb.min, Math.min(rb.max, color.c3));
+  const ca = Math.max(0, Math.min(1, color.alpha));
+  return make(color._space, cc1, cc2, cc3, ca);
 }
 
 /**
@@ -926,22 +1114,25 @@ export function clampToRange<S extends ColorSpaceDef<string>>(color: ColorValue<
  * isInRange(make(sRGB, 0.5, 0.5, 0.5));  // true
  * isInRange(make(sRGB, 1.5, 0.5, 0.5));  // false
  */
-export function isInRange<S extends ColorSpaceDef<string>>(color: ColorValue<S>): boolean {
+export function isInRange<S extends ColorSpaceDef<string>>(
+  color: ColorValue<S>,
+): boolean {
   const [rr, rg, rb] = color._space.descriptor.channelRanges;
   const eps = 1e-4;
   return (
-    color.r >= rr.min - eps &&
-    color.r <= rr.max + eps &&
-    color.g >= rg.min - eps &&
-    color.g <= rg.max + eps &&
-    color.b >= rb.min - eps &&
-    color.b <= rb.max + eps
+    color.c1 >= rr.min - eps &&
+    color.c1 <= rr.max + eps &&
+    color.c2 >= rg.min - eps &&
+    color.c2 <= rg.max + eps &&
+    color.c3 >= rb.min - eps &&
+    color.c3 <= rb.max + eps
   );
 }
 
 /**
  * @summary
- * Check that the color is inside the sRGB gamut.
+ * Check that the color, when converted to sRGB, has all channels in
+ * 0 to 1.
  *
  * @description
  * Converts the color to sRGB, then checks each channel. A color is in
@@ -950,15 +1141,16 @@ export function isInRange<S extends ColorSpaceDef<string>>(color: ColorValue<S>)
  * @template S - The color space type.
  *
  * @param color - The color to test.
- * @returns True if the color is inside the sRGB gamut.
+ * @returns `true` if the color is inside the sRGB gamut.
  *
  * @example
  * isInSRGBGamut(make(Display_P3, 0.0, 0.9, 0.5)); // false
  * isInSRGBGamut(make(sRGB, 0.5, 0.5, 0.5));       // true
  */
-export function isInSRGBGamut<S extends ColorSpaceDef<string>>(color: ColorValue<S>): boolean {
-  const c = convert(color, sRGB);
-  return isInRange(c);
+export function isInSRGBGamut<S extends ColorSpaceDef<string>>(
+  color: ColorValue<S>,
+): boolean {
+  return isInRange(convert(color, sRGB));
 }
 
 /**
@@ -966,7 +1158,7 @@ export function isInSRGBGamut<S extends ColorSpaceDef<string>>(color: ColorValue
  * Format a `ColorValue` for human reading.
  *
  * @description
- * The output is `<spaceId>(r, g, b, a)`. Each channel is fixed to the
+ * The output is `<spaceId>(c1, c2, c3, a)`. Each channel is fixed to the
  * requested number of decimal places. The default is 4.
  *
  * @template S - The color space type.
@@ -988,7 +1180,7 @@ export function format<S extends ColorSpaceDef<string>>(
   decimals = 4,
 ): string {
   const d = decimals;
-  return `${color._space.id}(${color.r.toFixed(d)}, ${color.g.toFixed(d)}, ${color.b.toFixed(d)}, ${color.a.toFixed(d)})`;
+  return `${color._space.id}(${color.c1.toFixed(d)}, ${color.c2.toFixed(d)}, ${color.c3.toFixed(d)}, ${color.alpha.toFixed(d)})`;
 }
 
 /**
@@ -1023,13 +1215,25 @@ export function mix<
   Sa extends ColorSpaceDef<string>,
   Sb extends ColorSpaceDef<string>,
   W extends ColorSpaceDef<string> = typeof OKLab,
->(a: ColorValue<Sa>, b: ColorValue<Sb>, t: number, workingSpace?: W): ColorValue<W> {
+>(
+  a: ColorValue<Sa>,
+  b: ColorValue<Sb>,
+  t: number,
+  workingSpace?: W,
+): ColorValue<W> {
   const ws = (workingSpace ?? OKLab) as unknown as W;
   const ca = convert(a, ws);
   const cb = convert(b, ws);
-  const lerp = (x: number, y: number) => x + (y - x) * t;
-  return make(ws, lerp(ca.r, cb.r), lerp(ca.g, cb.g), lerp(ca.b, cb.b), lerp(ca.a, cb.a));
+  const lerp = (x: number, y: number): number => x + (y - x) * t;
+  return make(
+    ws,
+    lerp(ca.c1, cb.c1),
+    lerp(ca.c2, cb.c2),
+    lerp(ca.c3, cb.c3),
+    lerp(ca.alpha, cb.alpha),
+  );
 }
+
 /**
  * @summary
  * Set one channel of a color value and return a new value.
@@ -1038,11 +1242,11 @@ export function mix<
  * The function copies the input. It writes the new channel value. The
  * space tag is preserved. The input object is not changed.
  *
- * Use the three string literals `'r'`, `'g'`, and `'b'` as the channel
+ * Use the three string literals `0`, `1`, and `2` as the channel
  * name. The `a` channel has its own helper, `withAlpha`.
  *
  * @template S - The color space type.
- * @template C - The channel name. One of `'r'`, `'g'`, or `'b'`.
+ * @template C - The channel index. One of `0`, `1`, or `2`.
  *
  * @param color - The source color.
  * @param channel - The channel to replace.
@@ -1052,16 +1256,16 @@ export function mix<
  * @example
  * const red = make(sRGB, 1, 0, 0);
  * const dark = withChannel(red, 'r', 0.5);
- * // dark.r === 0.5 and red.r === 1
+ * // dark.c1 === 0.5 and red.c1 === 1
  */
-export function withChannel<S extends ColorSpaceDef<string>, C extends 'r' | 'g' | 'b'>(
+export function withChannel<S extends ColorSpaceDef<string>, C extends 0 | 1 | 2>(
   color: ColorValue<S>,
   channel: C,
   value: number,
 ): ColorValue<S> {
-  if (channel === 'r') return make(color._space, value, color.g, color.b, color.a);
-  if (channel === 'g') return make(color._space, color.r, value, color.b, color.a);
-  return make(color._space, color.r, color.g, value, color.a);
+  if (channel === 0) return make(color._space, value, color.c2, color.c3, color.alpha);
+  if (channel === 1) return make(color._space, color.c1, value, color.c3, color.alpha);
+  return make(color._space, color.c1, color.c2, value, color.alpha);
 }
 
 /**
@@ -1081,13 +1285,13 @@ export function withChannel<S extends ColorSpaceDef<string>, C extends 'r' | 'g'
  * @example
  * const red = make(sRGB, 1, 0, 0);
  * const faint = withAlpha(red, 0.5);
- * // faint.a === 0.5 and red.a === 1
+ * // faint.alpha === 0.5 and red.alpha === 1
  */
 export function withAlpha<S extends ColorSpaceDef<string>>(
   color: ColorValue<S>,
-  a: number,
+  alpha: number,
 ): ColorValue<S> {
-  return make(color._space, color.r, color.g, color.b, a);
+  return make(color._space, color.c1, color.c2, color.c3, alpha);
 }
 
 /**
@@ -1096,9 +1300,9 @@ export function withAlpha<S extends ColorSpaceDef<string>>(
  *
  * @description
  * This object exposes the private `toXYZ` and `fromXYZ` helpers. It
- * exists so that `wasm/fallback.ts` can hoist the matrix lookups out
- * of a hot loop. Do not use these helpers in application code. Use
- * `convert` instead.
+ * exists so that other modules in this directory can hoist the matrix
+ * lookups out of a hot loop. Do not use these helpers in application
+ * code. Use `convert` instead.
  *
  * @internal
  * @private
