@@ -18,32 +18,32 @@ describe('quantize', () => {
   it('snaps to 4-bit levels', () => {
     const c = quantize(make(sRGB, 0.5, 0.5, 0.5), 4);
     // 0.5 * 15 = 7.5, rounds to 8. 8 / 15 = 0.5333...
-    expect(c.r).toBeCloseTo(8 / 15, 5);
+    expect(c.c1).toBeCloseTo(8 / 15, 5);
   });
 
   it('preserves alpha when bits is a number', () => {
     const c = quantize(make(sRGB, 0.5, 0.5, 0.5, 0.25), 4);
-    expect(c.a).toBe(0.25);
+    expect(c.alpha).toBe(0.25);
   });
 
   it('applies rgb565 layout', () => {
     const c = quantize(make(sRGB, 1, 1, 1), 'rgb565');
-    expect(c.r).toBe(1);
-    expect(c.g).toBe(1);
-    expect(c.b).toBe(1);
+    expect(c.c1).toBe(1);
+    expect(c.c2).toBe(1);
+    expect(c.c3).toBe(1);
   });
 
   it('applies rgba4444 layout with alpha', () => {
     const c = quantize(make(sRGB, 0.5, 0.5, 0.5, 0.5), 'rgba4444');
-    expect(c.a).toBeCloseTo(8 / 15, 5);
+    expect(c.alpha).toBeCloseTo(8 / 15, 5);
   });
 
   it('applies rgb332 layout', () => {
     const c = quantize(make(sRGB, 0.5, 0.5, 0.5), 'rgb332');
     // Red: 0.5 * 7 = 3.5, rounds to 4. 4 / 7 = 0.571.
-    expect(c.r).toBeCloseTo(4 / 7, 5);
+    expect(c.c1).toBeCloseTo(4 / 7, 5);
     // Blue: 0.5 * 3 = 1.5, rounds to 2. 2 / 3 = 0.667.
-    expect(c.b).toBeCloseTo(2 / 3, 5);
+    expect(c.c3).toBeCloseTo(2 / 3, 5);
   });
 
   it('throws on an out-of-range bit count', () => {
@@ -74,21 +74,21 @@ describe('dither', () => {
     // A flat mid-gray with Bayer should produce more than one value.
     const flat = new Array(64).fill(make(sRGB, 0.5, 0.5, 0.5));
     const out = dither(flat, 8, 8, { mode: 'bayer', matrixSize: 4 });
-    const unique = new Set(out.map((c) => c.r));
+    const unique = new Set(out.map((c) => c.c1));
     expect(unique.size).toBeGreaterThan(1);
   });
 
   it('floyd-steinberg mode diffuses the error to neighbors', () => {
     const flat = new Array(64).fill(make(sRGB, 0.5, 0.5, 0.5));
     const out = dither(flat, 8, 8, { mode: 'floyd-steinberg' });
-    const unique = new Set(out.map((c) => c.r));
+    const unique = new Set(out.map((c) => c.c1));
     expect(unique.size).toBeGreaterThan(1);
   });
 
   it('every output channel is at a 565 level', () => {
     const out = dither(gradient(), 4, 4, { mode: 'bayer' });
     for (const c of out) {
-      const rLevel = c.r * 31;
+      const rLevel = c.c1 * 31;
       expect(Math.abs(rLevel - Math.round(rLevel))).toBeLessThan(1e-6);
     }
   });

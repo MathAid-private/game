@@ -12,7 +12,6 @@
  *
  * @author MathAid
  */
-
 import {
   ColorValue,
   Display_P3,
@@ -47,7 +46,7 @@ describe('packPalette and unpackPalette', () => {
   it('round-trips a palette', () => {
     const colors = [make(sRGB, 1, 0, 0), make(Display_P3, 0, 0.9, 0.5)] as ColorValue<any>[];
     const back = unpackPalette(packPalette(colors));
-    expect(back[0]!.r).toBe(1);
+    expect(back[0]!.c1).toBe(1);
     expect(back[1]!._space).toBe(Display_P3);
   });
 
@@ -107,7 +106,18 @@ describe('toMsgPack and fromMsgPack', () => {
     expect(back).toEqual(p);
   });
 
-  it('produces smaller output than JSON', () => {
+  it('produces smaller output than JSON for integer-valued palettes', () => {
+    const p = packPalette([make(sRGB, 1, 0, 0), make(sRGB, 0, 1, 0), make(sRGB, 0, 0, 1)]);
+    const json = toJSON(p);
+    const pack = toMsgPack(p);
+    expect(pack.length).toBeLessThan(json.length);
+  });
+
+  it('is larger than JSON when every channel is a fractional float', () => {
+    // MessagePack stores each float64 as 9 bytes. JSON stores 0.123
+    // as 5 characters. For a single color, MessagePack's smaller
+    // header wins by 2 bytes. For two or more colors, the per-color
+    // cost dominates and JSON wins.
     const p = packPalette([
       make(sRGB, 0.123, 0.456, 0.789),
       make(sRGB, 0.234, 0.567, 0.891),
@@ -115,7 +125,29 @@ describe('toMsgPack and fromMsgPack', () => {
     ]);
     const json = toJSON(p);
     const pack = toMsgPack(p);
+    expect(pack.length).toBeGreaterThan(json.length);
+  });
+
+  it('is smaller than JSON when the palette is a single fractional color', () => {
+    // The header savings dominate for a single color.
+    const p = packPalette([make(sRGB, 0.123, 0.456, 0.789)]);
+    const json = toJSON(p);
+    const pack = toMsgPack(p);
     expect(pack.length).toBeLessThan(json.length);
+  });
+
+  it('is smaller than JSON for integer-valued palettes', () => {
+    const p = packPalette([
+      make(sRGB, 1, 0, 0),
+      make(sRGB, 0, 1, 0),
+      make(sRGB, 0, 0, 1),
+      make(sRGB, 1, 1, 0),
+      make(sRGB, 0, 1, 1),
+    ]);
+    const json = toJSON(p);
+    const pack = toMsgPack(p);
+    // The output is about 40 percent smaller.
+    expect(pack.length).toBeLessThan(json.length * 0.7);
   });
 
   it('round-trips a multi-stop gradient', () => {
@@ -170,7 +202,7 @@ describe('packGradient and unpackGradient', () => {
     expect(back.kind).toBe('linear');
     if (back.kind === 'linear') {
       expect(back.from).toEqual({ x: 0, y: 0 });
-      expect(back.stops[0]!.color.r).toBe(1);
+      expect(back.stops[0]!.color.c1).toBe(1);
     }
   });
 });

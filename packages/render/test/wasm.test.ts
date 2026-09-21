@@ -13,13 +13,13 @@
  */
 
 import {
-  convertBatch,
-  convertBatchFast,
-  convertBatchSIMD,
-  Display_P3,
-  Linear_sRGB,
-  make,
-  sRGB,
+    convertBatch,
+    convertBatchFast,
+    convertBatchSIMD,
+    Display_P3,
+    Linear_sRGB,
+    make,
+    sRGB,
 } from '@games/render';
 import { describe, expect, it } from 'vitest';
 
@@ -30,9 +30,9 @@ describe('convertBatchFast', () => {
     const b = convertBatchFast(src, Linear_sRGB);
     expect(b.length).toBe(a.length);
     for (let i = 0; i < a.length; i++) {
-      expect(b[i]!.r).toBeCloseTo(a[i]!.r, 8);
-      expect(b[i]!.g).toBeCloseTo(a[i]!.g, 8);
-      expect(b[i]!.b).toBeCloseTo(a[i]!.b, 8);
+      expect(b[i]!.c1).toBeCloseTo(a[i]!.c1, 8);
+      expect(b[i]!.c2).toBeCloseTo(a[i]!.c2, 8);
+      expect(b[i]!.c3).toBeCloseTo(a[i]!.c3, 8);
     }
   });
 
@@ -50,7 +50,7 @@ describe('convertBatchFast', () => {
   it('preserves alpha', () => {
     const src = [make(Display_P3, 0.0, 0.9, 0.5, 0.25)];
     const out = convertBatchFast(src, sRGB);
-    expect(out[0]!.a).toBe(0.25);
+    expect(out[0]!.alpha).toBe(0.25);
   });
 
   it('handles a large input', () => {
@@ -66,6 +66,6 @@ describe('convertBatchSIMD', () => {
     const src = [make(sRGB, 0.5, 0.5, 0.5)];
     const a = convertBatch(src, Linear_sRGB);
     const b = convertBatchSIMD(src, Linear_sRGB);
-    expect(b[0]!.r).toBeCloseTo(a[0]!.r, 8);
+    expect(b[0]!.c1).toBeCloseTo(a[0]!.c1, 8);
   });
 });

@@ -18,10 +18,10 @@ describe('toMutable', () => {
   it('copies the channel values', () => {
     const src = make(sRGB, 0.1, 0.2, 0.3, 0.4);
     const m = toMutable(src);
-    expect(m.r).toBe(0.1);
-    expect(m.g).toBe(0.2);
-    expect(m.b).toBe(0.3);
-    expect(m.a).toBe(0.4);
+    expect(m.c1).toBe(0.1);
+    expect(m.c2).toBe(0.2);
+    expect(m.c3).toBe(0.3);
+    expect(m.alpha).toBe(0.4);
   });
 
   it('keeps the space tag', () => {
@@ -32,8 +32,8 @@ describe('toMutable', () => {
   it('does not alias the input', () => {
     const src = make(sRGB, 0.5, 0.5, 0.5);
     const m = toMutable(src);
-    m.r = 1;
-    expect(src.r).toBe(0.5);
+    m.c1 = 1;
+    expect(src.c1).toBe(0.5);
   });
 });
 
@@ -41,8 +41,8 @@ describe('toImmutable', () => {
   it('snapshots the current values', () => {
     const m = toMutable(make(sRGB, 0.1, 0.2, 0.3));
     const snap = toImmutable(m);
-    m.r = 1;
-    expect(snap.r).toBe(0.1);
+    m.c1 = 1;
+    expect(snap.c1).toBe(0.1);
   });
 
   it('keeps the space tag', () => {

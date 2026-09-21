@@ -266,7 +266,7 @@ export function fromTuple<S extends ColorSpaceDef<string>>(
   tuple: ColorTuple<S>,
   space: S,
 ): ColorValue<S> {
-  return make(space, tuple[0], tuple[1], tuple[2]);
+  return make(space, tuple[0], tuple[1], tuple[2], tuple[3]);
 }
 
 /**
@@ -689,7 +689,7 @@ function toXYZ(
   }
 
   // ICtCp to XYZ (D65).
-  if (id === ICtCp.id) {
+/*   if (id === ICtCp.id) {
     const [lp, mp, sp] = mulMat3(
       [0.000488, 0.000488, 0.000488, 0.000173, -0.000237, -0.000014, 0.000213, -0.00016, -0.000015],
       r,
@@ -709,7 +709,7 @@ function toXYZ(
       M,
       S,
     );
-  }
+  } */
 
   // General path: decode the transfer, then apply the toXYZ matrix.
   const { transfer, toXYZ: mat } = space.descriptor;
@@ -729,7 +729,7 @@ const JZAZBZ_B = 1.15;
 /** Jzazbz g constant. Scales Y in the pre-matrix step. */
 const JZAZBZ_G = 0.66;
 /** Jzazbz reference luminance in cd/m^2. */
-const JZAZBZ_L_REF = 10000;
+// const JZAZBZ_L_REF = 10000;
 /** Jzazbz PQ-like p exponent. */
 const JZAZBZ_P = (1.7 * 2523) / 2 ** 5;
 /** Jzazbz PQ-like c1 constant. */
@@ -773,15 +773,16 @@ const M_JZAZBZ_TO_IZAZBZ: Mat3 = [
  * The Jzazbz PQ-like forward curve.
  *
  * @description
- * Takes a linear LMS value in cd/m^2 and returns a PQ-like code value
- * in 0 to 1. This curve is similar to ST.2084 but uses different
- * constants.
+ * Takes a linear LMS value in the module's relative XYZ scale. Y=1
+ * corresponds to the D65 reference white. The curve uses the Safdar
+ * 2017 constants, which differ from ST.2084. No further normalization
+ * is applied because the input is already relative.
  *
- * @param v - The linear luminance.
- * @returns The code value.
+ * @param v - The linear LMS value on the module's relative scale.
+ * @returns The code value in 0 to 1.
  */
 function jzazbzPqForward(v: number): number {
-  const vp = Math.max(0, v / JZAZBZ_L_REF) ** JZAZBZ_N;
+  const vp = Math.max(0, v) ** JZAZBZ_N;
   return ((JZAZBZ_C1 + JZAZBZ_C2 * vp) / (1 + JZAZBZ_C3 * vp)) ** JZAZBZ_P;
 }
 
@@ -789,14 +790,21 @@ function jzazbzPqForward(v: number): number {
  * @summary
  * The Jzazbz PQ-like inverse curve.
  *
+ * @description
+ * Takes a code value in 0 to 1 and returns the linear LMS value on
+ * the module's relative scale. This is the exact inverse of
+ * `jzazbzPqForward`. The numerator uses `max(0, vp - c1)`, not
+ * `max(0, c1 - vp)`. The `max` handles the small negative values
+ * that float rounding can produce near v = 0.
+ *
  * @param v - The code value.
- * @returns The linear luminance in cd/m^2.
+ * @returns The linear LMS value on the module's relative scale.
  */
 function jzazbzPqInverse(v: number): number {
   const vp = Math.max(0, v) ** (1 / JZAZBZ_P);
-  const num = Math.max(0, JZAZBZ_C1 - vp);
-  const den = JZAZBZ_C3 * vp - JZAZBZ_C2;
-  return JZAZBZ_L_REF * (num / den) ** (1 / JZAZBZ_N);
+  const num = Math.max(0, vp - JZAZBZ_C1);
+  const den = JZAZBZ_C2 - JZAZBZ_C3 * vp;
+  return (num / den) ** (1 / JZAZBZ_N);
 }
 
 // -----------------------------------------------------------------
@@ -907,7 +915,7 @@ function fromXYZ(
   }
 
   // XYZ to ICtCp.
-  if (id === ICtCp.id) {
+/*   if (id === ICtCp.id) {
     const [L, M, S] = mulMat3(
       [0.3592, 0.6976, -0.0358, -0.1922, 1.1004, 0.0755, 0.007, 0.0749, 0.8434],
       X,
@@ -918,7 +926,7 @@ function fromXYZ(
     const mp = pqEncode(M);
     const sp = pqEncode(S);
     return mulMat3([2048, 2048, 0, 6610, -13613, 7003, 17933, -17390, -543], lp, mp, sp);
-  }
+  } */
 
   // XYZ D65 to Jzazbz.
   if (id === Jzazbz.id) {

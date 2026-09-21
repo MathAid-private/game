@@ -13,72 +13,72 @@
  */
 
 import {
-  clampToRange,
-  convert,
-  Display_P3,
-  format,
-  fromHex,
-  isInRange,
-  isInSRGBGamut,
-  make,
-  mix,
-  OKLab,
-  OKLCh,
-  sRGB,
-  XYZ_D65,
+    clampToRange,
+    convert,
+    Display_P3,
+    format,
+    fromHex,
+    isInRange,
+    isInSRGBGamut,
+    make,
+    mix,
+    OKLab,
+    OKLCh,
+    sRGB,
+    XYZ_D65,
 } from '@games/render';
 import { describe, expect, it } from 'vitest';
 
 describe('make', () => {
   it('creates a color value with the space attached', () => {
     const c = make(sRGB, 1, 0, 0);
-    expect(c.r).toBe(1);
-    expect(c.g).toBe(0);
-    expect(c.b).toBe(0);
-    expect(c.a).toBe(1);
+    expect(c.c1).toBe(1);
+    expect(c.c2).toBe(0);
+    expect(c.c3).toBe(0);
+    expect(c.alpha).toBe(1);
     expect(c._space).toBe(sRGB);
   });
 
   it('uses alpha 1 by default', () => {
-    expect(make(sRGB, 0, 0, 0).a).toBe(1);
+    expect(make(sRGB, 0, 0, 0).alpha).toBe(1);
   });
 
   it('accepts a custom alpha', () => {
-    expect(make(sRGB, 0, 0, 0, 0.5).a).toBe(0.5);
+    expect(make(sRGB, 0, 0, 0, 0.5).alpha).toBe(0.5);
   });
 });
 
 describe('fromHex', () => {
   it('parses #RRGGBB', () => {
     const c = fromHex('#FF8000');
-    expect(c.r).toBeCloseTo(1, 5);
-    expect(c.g).toBeCloseTo(0.50196, 4);
-    expect(c.b).toBeCloseTo(0, 5);
-    expect(c.a).toBe(1);
+    expect(c.c1).toBeCloseTo(1, 5);
+    expect(c.c2).toBeCloseTo(0.50196, 4);
+    expect(c.c3).toBeCloseTo(0, 5);
+    expect(c.alpha).toBe(1);
   });
 
   it('parses #RRGGBBAA', () => {
     const c = fromHex('#FF000080');
-    expect(c.a).toBeCloseTo(0.50196, 4);
+    expect(c.alpha).toBeCloseTo(0.50196, 4);
   });
 
   it('parses #RGB shorthand', () => {
     const c = fromHex('#F80');
     const ref = fromHex('#FF8800');
-    expect(c.r).toBeCloseTo(ref.r, 5);
-    expect(c.g).toBeCloseTo(ref.g, 5);
-    expect(c.b).toBeCloseTo(ref.b, 5);
+    expect(c.c1).toBeCloseTo(ref.c1, 5);
+    expect(c.c2).toBeCloseTo(ref.c2, 5);
+    expect(c.c3).toBeCloseTo(ref.c3, 5);
   });
 
   it('parses #RGBA shorthand', () => {
     const c = fromHex('#F808');
     const ref = fromHex('#FF880088');
-    expect(c.a).toBeCloseTo(ref.a, 5);
+    expect(c.alpha).toBeCloseTo(ref.alpha, 5);
   });
 
   it('accepts input without a leading #', () => {
     const c = fromHex('FF0000');
-    expect(c.r).toBeCloseTo(1, 5);
+    expect(c.c1).toBeCloseTo(1, 5);
   });
 
   it('throws on a wrong length', () => {
@@ -101,49 +101,49 @@ describe('convert', () => {
   it('converts sRGB white to XYZ D65 white', () => {
     const white = make(sRGB, 1, 1, 1);
     const xyz = convert(white, XYZ_D65);
-    expect(xyz.r).toBeCloseTo(0.9505, 3);
-    expect(xyz.g).toBeCloseTo(1.0, 3);
-    expect(xyz.b).toBeCloseTo(1.089, 3);
+    expect(xyz.c1).toBeCloseTo(0.9505, 3);
+    expect(xyz.c2).toBeCloseTo(1.0, 3);
+    expect(xyz.c3).toBeCloseTo(1.089, 3);
   });
 
   it('converts sRGB red to XYZ D65 red', () => {
     const red = make(sRGB, 1, 0, 0);
     const xyz = convert(red, XYZ_D65);
-    expect(xyz.r).toBeCloseTo(0.4124, 3);
-    expect(xyz.g).toBeCloseTo(0.2126, 3);
-    expect(xyz.b).toBeCloseTo(0.0193, 3);
+    expect(xyz.c1).toBeCloseTo(0.4124, 3);
+    expect(xyz.c2).toBeCloseTo(0.2126, 3);
+    expect(xyz.c3).toBeCloseTo(0.0193, 3);
   });
 
   it('round-trips sRGB to OKLab to sRGB', () => {
     const src = make(sRGB, 0.3, 0.6, 0.9);
     const lab = convert(src, OKLab);
     const back = convert(lab, sRGB);
-    expect(back.r).toBeCloseTo(src.r, 4);
-    expect(back.g).toBeCloseTo(src.g, 4);
-    expect(back.b).toBeCloseTo(src.b, 4);
+    expect(back.c1).toBeCloseTo(src.c1, 4);
+    expect(back.c2).toBeCloseTo(src.c2, 4);
+    expect(back.c3).toBeCloseTo(src.c3, 4);
   });
 
   it('round-trips sRGB to OKLCh to sRGB', () => {
     const src = make(sRGB, 0.7, 0.2, 0.4);
     const lch = convert(src, OKLCh);
     const back = convert(lch, sRGB);
-    expect(back.r).toBeCloseTo(src.r, 4);
-    expect(back.g).toBeCloseTo(src.g, 4);
-    expect(back.b).toBeCloseTo(src.b, 4);
+    expect(back.c1).toBeCloseTo(src.c1, 4);
+    expect(back.c2).toBeCloseTo(src.c2, 4);
+    expect(back.c3).toBeCloseTo(src.c3, 4);
   });
 
   it('copies alpha through every conversion', () => {
     const src = make(sRGB, 0.5, 0.5, 0.5, 0.25);
     const dst = convert(src, OKLab);
-    expect(dst.a).toBe(0.25);
+    expect(dst.alpha).toBe(0.25);
   });
 
   it('converts black to the OKLab origin', () => {
     const black = make(sRGB, 0, 0, 0);
     const lab = convert(black, OKLab);
-    expect(lab.r).toBeCloseTo(0, 5);
-    expect(lab.g).toBeCloseTo(0, 5);
-    expect(lab.b).toBeCloseTo(0, 5);
+    expect(lab.c1).toBeCloseTo(0, 5);
+    expect(lab.c2).toBeCloseTo(0, 5);
+    expect(lab.c3).toBeCloseTo(0, 5);
   });
 });
 
@@ -151,19 +151,19 @@ describe('clampToRange', () => {
   it('clamps each channel to its own range', () => {
     const c = make(sRGB, 1.5, -0.2, 0.5);
     const out = clampToRange(c);
-    expect(out.r).toBe(1);
-    expect(out.g).toBe(0);
-    expect(out.b).toBe(0.5);
+    expect(out.c1).toBe(1);
+    expect(out.c2).toBe(0);
+    expect(out.c3).toBe(0.5);
   });
 
   it('clamps alpha to 0 to 1', () => {
     const c = make(sRGB, 0, 0, 0, 2);
-    expect(clampToRange(c).a).toBe(1);
+    expect(clampToRange(c).alpha).toBe(1);
   });
 
   it('does not clamp the OKLCh hue channel', () => {
     const c = make(OKLCh, 0.5, 0.2, 720);
-    expect(clampToRange(c).b).toBe(720);
+    expect(clampToRange(c).c3).toBe(720);
   });
 
   it('leaves an in-range color unchanged', () => {
@@ -222,18 +222,18 @@ describe('mix', () => {
     const a = make(sRGB, 1, 0, 0);
     const b = make(sRGB, 0, 0, 1);
     const out = mix(a, b, 0, sRGB);
-    expect(out.r).toBeCloseTo(1, 4);
-    expect(out.g).toBeCloseTo(0, 4);
-    expect(out.b).toBeCloseTo(0, 4);
+    expect(out.c1).toBeCloseTo(1, 4);
+    expect(out.c2).toBeCloseTo(0, 4);
+    expect(out.c3).toBeCloseTo(0, 4);
   });
 
   it('returns the second color when t=1 in the working space', () => {
     const a = make(sRGB, 1, 0, 0);
     const b = make(sRGB, 0, 0, 1);
     const out = mix(a, b, 1, sRGB);
-    expect(out.r).toBeCloseTo(0, 4);
-    expect(out.g).toBeCloseTo(0, 4);
-    expect(out.b).toBeCloseTo(1, 4);
+    expect(out.c1).toBeCloseTo(0, 4);
+    expect(out.c2).toBeCloseTo(0, 4);
+    expect(out.c3).toBeCloseTo(1, 4);
   });
 
   it('defaults to the OKLab working space', () => {
@@ -249,7 +249,7 @@ describe('mix', () => {
     const a = make(sRGB, 1, 0, 0);
     const b = make(sRGB, 0, 0, 1);
     const out = mix(a, b, 0);
-    expect(out.r).toBeCloseTo(0.628, 3);
+    expect(out.c1).toBeCloseTo(0.628, 3);
     expect(out._space).toBe(OKLab);
   });
 
@@ -258,14 +258,14 @@ describe('mix', () => {
     const blue = make(sRGB, 0, 0, 1);
     const mid = mix(red, blue, 0.5, sRGB);
     expect(mid._space).toBe(sRGB);
-    expect(mid.r).toBeCloseTo(0.5, 4);
-    expect(mid.b).toBeCloseTo(0.5, 4);
+    expect(mid.c1).toBeCloseTo(0.5, 4);
+    expect(mid.c3).toBeCloseTo(0.5, 4);
   });
 
   it('interpolates alpha', () => {
     const a = make(sRGB, 0, 0, 0, 0);
     const b = make(sRGB, 0, 0, 0, 1);
     const mid = mix(a, b, 0.5, sRGB);
-    expect(mid.a).toBeCloseTo(0.5, 4);
+    expect(mid.alpha).toBeCloseTo(0.5, 4);
   });
 });

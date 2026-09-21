@@ -58,11 +58,14 @@ export function parseICC(data: ArrayBuffer | Uint8Array): ICCProfile {
   const viewBE = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const sizeBE = viewBE.getUint32(0, false);
   const sizeLE = viewBE.getUint32(0, true);
-  const bigEndian = sizeBE <= bytes.length && sizeBE > 0;
-  if (!bigEndian && !(sizeLE <= bytes.length && sizeLE > 0)) {
+  const looksBigEndian = sizeBE <= bytes.length && sizeBE > 0;
+  const looksLittleEndian = sizeLE <= bytes.length && sizeLE > 0;
+  if (!looksBigEndian && !looksLittleEndian) {
     throw new Error('parseICC: size field does not match the file length.');
   }
-  const order = bigEndian;
+  // DataView.getUint32/getInt32 take a `littleEndian` flag. `order` is
+  // that flag. It is the opposite of "the file is big-endian".
+  const order = !looksBigEndian;
 
   // Signature check.
   const sig = readAscii(bytes, 36, 4);
@@ -247,6 +250,8 @@ function parseTRC(
   size: number,
   order: boolean,
 ): TRCFunction {
+  // A TRC tag has an 8-byte header (signature + reserved) plus at
+  // least 4 bytes of payload. Reject anything shorter.
   if (size < 12) {
     throw new Error(`parseICC: TRC tag is too short (${size} bytes).`);
   }

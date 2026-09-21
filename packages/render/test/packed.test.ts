@@ -13,14 +13,14 @@
  */
 
 import {
-  fromBGRA8,
-  fromRGBA8,
-  fromRgb565,
-  make,
-  sRGB,
-  toBGRA8,
-  toRGBA8,
-  toRgb565,
+    fromBGRA8,
+    fromRGBA8,
+    fromRgb565,
+    make,
+    sRGB,
+    toBGRA8,
+    toRGBA8,
+    toRgb565,
 } from '@games/render';
 import { describe, expect, it } from 'vitest';
 
@@ -36,18 +36,18 @@ describe('RGBA8', () => {
   it('unpacks to the original channels', () => {
     const packed = toRGBA8(make(sRGB, 1, 0, 0, 1));
     const c = fromRGBA8(packed);
-    expect(c.r).toBe(1);
-    expect(c.g).toBe(0);
-    expect(c.b).toBe(0);
-    expect(c.a).toBe(1);
+    expect(c.c1).toBe(1);
+    expect(c.c2).toBe(0);
+    expect(c.c3).toBe(0);
+    expect(c.alpha).toBe(1);
   });
 
   it('round-trips within 1/255', () => {
     const src = make(sRGB, 0.5, 0.25, 0.75, 1);
     const back = fromRGBA8(toRGBA8(src));
-    expect(back.r).toBeCloseTo(0.5, 2);
-    expect(back.g).toBeCloseTo(0.25, 2);
-    expect(back.b).toBeCloseTo(0.75, 2);
+    expect(back.c1).toBeCloseTo(0.5, 2);
+    expect(back.c2).toBeCloseTo(0.25, 2);
+    expect(back.c3).toBeCloseTo(0.75, 2);
   });
 });
 
@@ -62,8 +62,8 @@ describe('BGRA8', () => {
 
   it('unpacks to the original channels', () => {
     const c = fromBGRA8(toBGRA8(make(sRGB, 1, 0, 0, 1)));
-    expect(c.r).toBe(1);
-    expect(c.b).toBe(0);
+    expect(c.c1).toBe(1);
+    expect(c.c3).toBe(0);
   });
 });
 
@@ -82,21 +82,21 @@ describe('Rgb565', () => {
 
   it('unpacks red exactly', () => {
     const c = fromRgb565(0xf800);
-    expect(c.r).toBe(1);
-    expect(c.g).toBe(0);
-    expect(c.b).toBe(0);
-    expect(c.a).toBe(1);
+    expect(c.c1).toBe(1);
+    expect(c.c2).toBe(0);
+    expect(c.c3).toBe(0);
+    expect(c.alpha).toBe(1);
   });
 
   it('unpacks green with 6-bit precision', () => {
     const c = fromRgb565(0x07e0);
-    expect(c.g).toBe(1);
+    expect(c.c2).toBe(1);
   });
 
   it('round-trips mid gray within 5-bit precision', () => {
     const src = make(sRGB, 0.5, 0.5, 0.5);
     const back = fromRgb565(toRgb565(src));
-    expect(back.r).toBeCloseTo(0.5, 1);
-    expect(back.g).toBeCloseTo(0.5, 1);
+    expect(back.c1).toBeCloseTo(0.5, 1);
+    expect(back.c2).toBeCloseTo(0.5, 1);
   });
 });

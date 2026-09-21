@@ -13,14 +13,14 @@
  */
 
 import {
-  convertBatch,
-  fromFloat32Array,
-  fromUint8Array,
-  Linear_sRGB,
-  make,
-  sRGB,
-  toFloat32Array,
-  toUint8Array,
+    convertBatch,
+    fromFloat32Array,
+    fromUint8Array,
+    Linear_sRGB,
+    make,
+    sRGB,
+    toFloat32Array,
+    toUint8Array,
 } from '@games/render';
 import { describe, expect, it } from 'vitest';
 
@@ -51,8 +51,8 @@ describe('fromFloat32Array', () => {
     const data = new Float32Array([1, 0, 0, 1, 0, 0, 1, 1]);
     const colors = fromFloat32Array(data, sRGB);
     expect(colors.length).toBe(2);
-    expect(colors[0]!.r).toBe(1);
-    expect(colors[1]!.b).toBe(1);
+    expect(colors[0]!.c1).toBe(1);
+    expect(colors[1]!.c3).toBe(1);
   });
 
   it('throws on a wrong data length', () => {
@@ -62,8 +62,8 @@ describe('fromFloat32Array', () => {
   it('round-trips through toFloat32Array', () => {
     const src = [make(sRGB, 0.1, 0.2, 0.3, 0.4)];
     const back = fromFloat32Array(toFloat32Array(src), sRGB);
-    expect(back[0]!.r).toBeCloseTo(0.1, 5);
-    expect(back[0]!.a).toBeCloseTo(0.4, 5);
+    expect(back[0]!.c1).toBeCloseTo(0.1, 5);
+    expect(back[0]!.alpha).toBeCloseTo(0.4, 5);
   });
 });
 
@@ -84,9 +84,9 @@ describe('fromUint8Array', () => {
   it('divides each byte by 255', () => {
     const data = new Uint8Array([255, 128, 0, 255]);
     const colors = fromUint8Array(data, sRGB);
-    expect(colors[0]!.r).toBeCloseTo(1, 5);
-    expect(colors[0]!.g).toBeCloseTo(128 / 255, 5);
-    expect(colors[0]!.b).toBe(0);
+    expect(colors[0]!.c1).toBeCloseTo(1, 5);
+    expect(colors[0]!.c2).toBeCloseTo(128 / 255, 5);
+    expect(colors[0]!.c3).toBe(0);
   });
 });
 

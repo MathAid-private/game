@@ -35,7 +35,7 @@ import { describe, expect, it } from 'vitest';
 describe('backends object', () => {
   it('contains all five adapters', () => {
     expect(Object.keys(backends).sort()).toEqual(
-      ['DX12', 'Metal', 'OpenGL', 'Vulkan', 'WebGPU'].sort(),
+      ['DX12', 'Metal', 'OpenGL', 'PS5', 'Software', 'Switch', 'Vulkan', 'WebGPU'].sort(),
     );
   });
 });
@@ -56,9 +56,9 @@ describe('DX12 adapter', () => {
   it('clearColor emits linear values', () => {
     const out = DX12.clearColor(make(sRGB, 1, 0, 0));
     const ref = convert(make(sRGB, 1, 0, 0), Linear_sRGB);
-    expect(out.Color[0]).toBeCloseTo(ref.r, 5);
-    expect(out.Color[1]).toBeCloseTo(ref.g, 5);
-    expect(out.Color[2]).toBeCloseTo(ref.b, 5);
+    expect(out.Color[0]).toBeCloseTo(ref.c1, 5);
+    expect(out.Color[1]).toBeCloseTo(ref.c2, 5);
+    expect(out.Color[2]).toBeCloseTo(ref.c3, 5);
   });
 
   it('configure returns a swap-chain and back-buffer pair', () => {

@@ -12,7 +12,15 @@
  * @author MathAid
  */
 
-import { applyProfile, convert, make, parseICC, sRGB, XYZ_D65 } from '@games/render';
+import {
+  applyProfile,
+  convert,
+  make,
+  parseICC,
+  sRGB,
+  toProfileSpace,
+  XYZ_D65,
+} from '@games/render';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -122,16 +130,16 @@ describe('applyProfile', () => {
     const xyz = applyProfile(make(sRGB, 1, 1, 1), profile);
     expect(xyz._space).toBe(XYZ_D65);
     // D65 white after adaptation from D50. X near 0.95.
-    expect(xyz.r).toBeGreaterThan(0.9);
-    expect(xyz.g).toBeCloseTo(1, 1);
+    expect(xyz.c1).toBeGreaterThan(0.9);
+    expect(xyz.c2).toBeCloseTo(1, 1);
   });
 
   it('produces a different XYZ for red and blue', () => {
     const profile = parseICC(buildSRGBProfile());
     const red = applyProfile(make(sRGB, 1, 0, 0), profile);
     const blue = applyProfile(make(sRGB, 0, 0, 1), profile);
-    expect(red.r).not.toBeCloseTo(blue.r, 2);
-    expect(red.b).not.toBeCloseTo(blue.b, 2);
+    expect(red.c1).not.toBeCloseTo(blue.c1, 2);
+    expect(red.c3).not.toBeCloseTo(blue.c3, 2);
   });
 
   it('throws when the profile has no matrix', () => {
@@ -148,6 +156,24 @@ describe('round-trip', () => {
     const direct = convert(make(sRGB, 0.5, 0.5, 0.5), XYZ_D65);
     // The profile uses gamma 2.2, which is close to the sRGB curve
     // but not identical. Expect a small difference.
-    expect(Math.abs(viaIcc.r - direct.r)).toBeLessThan(0.05);
+    expect(Math.abs(viaIcc.c1 - direct.c1)).toBeLessThan(0.05);
+  });
+});
+
+describe('toProfileSpace', () => {
+  it('round-trips through applyProfile', () => {
+    const profile = parseICC(buildSRGBProfile());
+    const original = make(sRGB, 0.5, 0.3, 0.7);
+    const xyz = applyProfile(original, profile);
+    const back = toProfileSpace(xyz, profile, sRGB);
+    expect(back.c1).toBeCloseTo(original.c1, 2);
+    expect(back.c2).toBeCloseTo(original.c2, 2);
+    expect(back.c3).toBeCloseTo(original.c3, 2);
+  });
+
+  it('throws when the profile has no fromPCS matrix', () => {
+    const profile = parseICC(buildSRGBProfile());
+    const noMatrix = { ...profile, fromPCS: undefined };
+    expect(() => toProfileSpace(make(XYZ_D65, 0.5, 0.5, 0.5), noMatrix, sRGB)).toThrow(/fromPCS/);
   });
 });

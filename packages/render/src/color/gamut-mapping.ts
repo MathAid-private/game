@@ -90,6 +90,16 @@ export type GamutMappingMethod = 'clamp' | 'css-chroma';
 
 /** @summary The delta-E tolerance for the CSS Color 4 bisection. */
 const DELTA_E_EPSILON = 0.02;
+/**
+ * @summary The chroma threshold for treating a color as gray.
+ *
+ * @description
+ * The OKLab pipeline leaves about 1e-4 of residual chroma on a pure
+ * gray. Float rounding in the EOTF, the matrix multiply, and the
+ * cube roots all contribute. Real chromatic colors have chroma above
+ * 0.01. This threshold separates the two.
+ */
+const GRAY_CHROMA_THRESHOLD = 1e-3
 
 /**
  * @summary
@@ -417,9 +427,11 @@ export function checkGamutAll<S extends ColorSpaceDef<string>>(
  *       +---------------> Lightness
  * ```
  *
- * When the color is already outside the target gamut, the input is
- * returned unchanged. Expansion only moves inward to outward. Use
- * `mapToGamut` to move outward to inward.
+ * When the color is already outside the target gamut, the function's
+ * return type is `ColorValue<T>` where `T` is the **target space**.
+ * It cannot return the input unchanged. It returns the input
+ * converted to the **target space**. Expansion only moves inward
+ * to outward. Use `mapToGamut` to move outward to inward.
  *
  * @template S - The source color space type.
  * @template T - The target color space type.
@@ -456,8 +468,9 @@ export function expandGamut<S extends ColorSpaceDef<string>, T extends ColorSpac
   const H = lch.c3;
   const c0 = lch.c2;
 
-  // Gray colors have no direction. Return the input.
-  if (c0 < 1e-6) return inTarget;
+  // Gray colors have no meaningful hue direction. Return the input
+  // converted to the target space.
+  if (c0 < GRAY_CHROMA_THRESHOLD) return inTarget;
 
   // Binary-search the boundary chroma.
   let lo = c0;

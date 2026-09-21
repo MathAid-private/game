@@ -18,65 +18,65 @@ describe('fromCSS hex', () => {
   it('parses #f80', () => {
     const c = fromCSS('#f80');
     expect(c._space).toBe(sRGB);
-    expect(c.r).toBeCloseTo(1, 3);
-    expect(c.g).toBeCloseTo(0.533, 2);
+    expect(c.c1).toBeCloseTo(1, 3);
+    expect(c.c2).toBeCloseTo(0.533, 2);
   });
 
   it('parses #ff8800', () => {
     const c = fromCSS('#ff8800');
-    expect(c.r).toBeCloseTo(1, 3);
-    expect(c.g).toBeCloseTo(0.533, 2);
+    expect(c.c1).toBeCloseTo(1, 3);
+    expect(c.c2).toBeCloseTo(0.533, 2);
   });
 
   it('parses #ff880080 with alpha', () => {
     const c = fromCSS('#ff880080');
-    expect(c.a).toBeCloseTo(0.502, 2);
+    expect(c.alpha).toBeCloseTo(0.502, 2);
   });
 });
 
 describe('fromCSS named colors', () => {
   it('parses "red"', () => {
     const c = fromCSS('red');
-    expect(c.r).toBeCloseTo(1, 3);
-    expect(c.g).toBe(0);
+    expect(c.c1).toBeCloseTo(1, 3);
+    expect(c.c2).toBe(0);
   });
 
   it('parses "rebeccapurple" case-insensitively', () => {
     const c = fromCSS('REBECCAPURPLE');
-    expect(c.r).toBeCloseTo(0.4, 2);
-    expect(c.b).toBeCloseTo(0.6, 2);
+    expect(c.c1).toBeCloseTo(0.4, 2);
+    expect(c.c3).toBeCloseTo(0.6, 2);
   });
 });
 
 describe('fromCSS rgb', () => {
   it('parses comma-separated form', () => {
     const c = fromCSS('rgb(255, 128, 0)');
-    expect(c.r).toBeCloseTo(1, 3);
-    expect(c.g).toBeCloseTo(0.502, 2);
+    expect(c.c1).toBeCloseTo(1, 3);
+    expect(c.c2).toBeCloseTo(0.502, 2);
   });
 
   it('parses space-separated form with slash alpha', () => {
     const c = fromCSS('rgb(255 128 0 / 0.5)');
-    expect(c.a).toBeCloseTo(0.5, 3);
+    expect(c.alpha).toBeCloseTo(0.5, 3);
   });
 
   it('parses percentage form', () => {
     const c = fromCSS('rgb(100% 50% 0%)');
-    expect(c.r).toBeCloseTo(1, 3);
-    expect(c.g).toBeCloseTo(0.5, 3);
+    expect(c.c1).toBeCloseTo(1, 3);
+    expect(c.c2).toBeCloseTo(0.5, 3);
   });
 });
 
 describe('fromCSS hsl', () => {
   it('parses hsl(0, 100%, 50%)', () => {
     const c = fromCSS('hsl(0, 100%, 50%)');
-    expect(c.r).toBeCloseTo(1, 3);
-    expect(c.g).toBeCloseTo(0, 3);
+    expect(c.c1).toBeCloseTo(1, 3);
+    expect(c.c2).toBeCloseTo(0, 3);
   });
 
   it('parses hsl with deg suffix', () => {
     const c = fromCSS('hsl(120deg 100% 50%)');
-    expect(c.g).toBeCloseTo(1, 3);
+    expect(c.c2).toBeCloseTo(1, 3);
   });
 });
 
@@ -84,14 +84,14 @@ describe('fromCSS oklch', () => {
   it('returns an OKLCh color', () => {
     const c = fromCSS('oklch(0.7 0.15 60)');
     expect(c._space).toBe(OKLCh);
-    expect(c.r).toBeCloseTo(0.7, 3);
-    expect(c.g).toBeCloseTo(0.15, 3);
-    expect(c.b).toBeCloseTo(60, 1);
+    expect(c.c1).toBeCloseTo(0.7, 3);
+    expect(c.c2).toBeCloseTo(0.15, 3);
+    expect(c.c3).toBeCloseTo(60, 1);
   });
 
   it('accepts alpha', () => {
     const c = fromCSS('oklch(0.7 0.15 60 / 0.5)');
-    expect(c.a).toBeCloseTo(0.5, 3);
+    expect(c.alpha).toBeCloseTo(0.5, 3);
   });
 });
 
@@ -99,7 +99,7 @@ describe('fromCSS color()', () => {
   it('parses display-p3', () => {
     const c = fromCSS('color(display-p3 1 0.5 0)');
     expect(c._space).toBe(Display_P3);
-    expect(c.r).toBeCloseTo(1, 3);
+    expect(c.c1).toBeCloseTo(1, 3);
   });
 
   it('parses rec2020', () => {
@@ -158,7 +158,7 @@ describe('CSS round-trip', () => {
     const c = fromCSS('oklch(0.7 0.15 60)');
     const s = toCSS(c, 'oklch');
     const back = fromCSS(s);
-    expect(back.r).toBeCloseTo(0.7, 3);
+    expect(back.c1).toBeCloseTo(0.7, 3);
   });
 });
 

@@ -37,23 +37,23 @@ describe('adapt', () => {
     const src = make(sRGB, 0.5, 0.3, 0.8);
     const d50 = adapt(src, 'D65', 'D50');
     const back = adapt(d50, 'D50', 'D65');
-    expect(back.r).toBeCloseTo(src.r, 3);
-    expect(back.g).toBeCloseTo(src.g, 3);
-    expect(back.b).toBeCloseTo(src.b, 3);
+    expect(back.c1).toBeCloseTo(src.c1, 3);
+    expect(back.c2).toBeCloseTo(src.c2, 3);
+    expect(back.c3).toBeCloseTo(src.c3, 3);
   });
 
   it('preserves alpha', () => {
     const src = make(sRGB, 0.5, 0.5, 0.5, 0.25);
     const out = adapt(src, 'D65', 'D50');
-    expect(out.a).toBe(0.25);
+    expect(out.alpha).toBe(0.25);
   });
 
   it('adapts D65 white to the D50 white point', () => {
     const xyz = make(XYZ_D65, 0.95047, 1.0, 1.08883);
     const d50 = adapt(xyz, 'D65', 'D50');
-    expect(d50.r).toBeCloseTo(0.96422, 3);
-    expect(d50.g).toBeCloseTo(1.0, 3);
-    expect(d50.b).toBeCloseTo(0.82521, 3);
+    expect(d50.c1).toBeCloseTo(0.96422, 3);
+    expect(d50.c2).toBeCloseTo(1.0, 3);
+    expect(d50.c3).toBeCloseTo(0.82521, 3);
   });
 
   it('every method produces the same white point', () => {
@@ -61,9 +61,9 @@ describe('adapt', () => {
     const methods = ['bradford', 'von-kries', 'cat02', 'xyz-scaling'] as const;
     for (const m of methods) {
       const out = adapt(xyz, 'D65', 'D50', m);
-      expect(out.r).toBeCloseTo(0.96422, 2);
-      expect(out.g).toBeCloseTo(1.0, 2);
-      expect(out.b).toBeCloseTo(0.82521, 2);
+      expect(out.c1).toBeCloseTo(0.96422, 2);
+      expect(out.c2).toBeCloseTo(1.0, 2);
+      expect(out.c3).toBeCloseTo(0.82521, 2);
     }
   });
 });

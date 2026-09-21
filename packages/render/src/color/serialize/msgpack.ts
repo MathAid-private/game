@@ -371,9 +371,16 @@ export async function* toMsgPackStream(
       r();
     }
   };
-
+  
+  const MAX_QUEUE = 64;
+  // In the sink's write:
   const sink: StreamSink = {
-    write(chunk) {
+    async write(chunk) {
+      while (queue.length >= MAX_QUEUE) {
+        await new Promise<void>((r) => {
+          resolveWait = r;
+        });
+      }
       queue.push(chunk);
       notify();
     },
@@ -668,12 +675,12 @@ class AsyncReader {
     return this.current![this.pos++]!;
   }
 
-  async peek(): Promise<number> {
+/*   async peek(): Promise<number> {
     if (!this.current || this.pos >= this.current.length) {
       await this.pull();
     }
     return this.current![this.pos]!;
-  }
+  } */
 
   async bytes(n: number): Promise<Uint8Array> {
     const out = new Uint8Array(n);
@@ -721,35 +728,22 @@ class AsyncReader {
 }
 
 async function decodeValueStream(r: AsyncReader): Promise<unknown> {
-  const first = await r.peek();
-  if (first <= 0x7f) {
-    await r.byte();
-    return first;
-  }
-  if (first >= 0xe0) {
-    await r.byte();
-    return first - 0x100;
-  }
+  const first = await r.byte();   // consumes the header byte
+
+  if (first <= 0x7f) return first;
+  if (first >= 0xe0) return first - 0x100;
   if (first >= 0x80 && first <= 0x8f) return decodeMapStream(r, first & 0x0f);
   if (first >= 0x90 && first <= 0x9f) return decodeArrayStream(r, first & 0x0f);
   if (first >= 0xa0 && first <= 0xbf) return decodeStringStream(r, first & 0x1f);
 
-  await r.byte();
   switch (first) {
-    case 0xc0:
-      return null;
-    case 0xc2:
-      return false;
-    case 0xc3:
-      return true;
-    case 0xcb:
-      return r.f64();
-    case 0xcc:
-      return r.byte();
-    case 0xcd:
-      return r.u16();
-    case 0xce:
-      return r.u32();
+    case 0xc0: return null;
+    case 0xc2: return false;
+    case 0xc3: return true;
+    case 0xcb: return r.f64();
+    case 0xcc: return r.byte();
+    case 0xcd: return r.u16();
+    case 0xce: return r.u32();
     case 0xd0: {
       const v = await r.byte();
       return v < 0x80 ? v : v - 0x100;
@@ -758,16 +752,11 @@ async function decodeValueStream(r: AsyncReader): Promise<unknown> {
       const v = await r.u16();
       return v < 0x8000 ? v : v - 0x10000;
     }
-    case 0xd2:
-      return (await r.u32()) | 0;
-    case 0xd9:
-      return decodeStringStream(r, await r.byte());
-    case 0xda:
-      return decodeStringStream(r, await r.u16());
-    case 0xdc:
-      return decodeArrayStream(r, await r.u16());
-    case 0xde:
-      return decodeMapStream(r, await r.u16());
+    case 0xd2: return (await r.u32()) | 0;
+    case 0xd9: return decodeStringStream(r, await r.byte());
+    case 0xda: return decodeStringStream(r, await r.u16());
+    case 0xdc: return decodeArrayStream(r, await r.u16());
+    case 0xde: return decodeMapStream(r, await r.u16());
     default:
       throw new Error(`fromMsgPackStream: unknown byte 0x${first.toString(16)}.`);
   }
@@ -806,12 +795,12 @@ class Reader {
     return this.buf[this.pos++]!;
   }
 
-  peek(): number {
+/*   peek(): number {
     if (this.pos >= this.buf.length) {
       throw new Error('fromMsgPack: unexpected end of data.');
     }
     return this.buf[this.pos]!;
-  }
+  } */
 
   bytes(n: number): Uint8Array {
     if (this.pos + n > this.buf.length) {
@@ -843,35 +832,22 @@ class Reader {
 }
 
 function decodeValue(r: Reader): unknown {
-  const first = r.peek();
-  if (first <= 0x7f) {
-    r.byte();
-    return first;
-  }
-  if (first >= 0xe0) {
-    r.byte();
-    return first - 0x100;
-  }
+  const first = r.byte();   // consumes the header byte
+
+  if (first <= 0x7f) return first;
+  if (first >= 0xe0) return first - 0x100;
   if (first >= 0x80 && first <= 0x8f) return decodeMap(r, first & 0x0f);
   if (first >= 0x90 && first <= 0x9f) return decodeArray(r, first & 0x0f);
   if (first >= 0xa0 && first <= 0xbf) return decodeString(r, first & 0x1f);
 
-  r.byte();
   switch (first) {
-    case 0xc0:
-      return null;
-    case 0xc2:
-      return false;
-    case 0xc3:
-      return true;
-    case 0xcb:
-      return r.f64();
-    case 0xcc:
-      return r.byte();
-    case 0xcd:
-      return r.u16();
-    case 0xce:
-      return r.u32();
+    case 0xc0: return null;
+    case 0xc2: return false;
+    case 0xc3: return true;
+    case 0xcb: return r.f64();
+    case 0xcc: return r.byte();
+    case 0xcd: return r.u16();
+    case 0xce: return r.u32();
     case 0xd0: {
       const v = r.byte();
       return v < 0x80 ? v : v - 0x100;
@@ -880,16 +856,11 @@ function decodeValue(r: Reader): unknown {
       const v = r.u16();
       return v < 0x8000 ? v : v - 0x10000;
     }
-    case 0xd2:
-      return r.u32() | 0;
-    case 0xd9:
-      return decodeString(r, r.byte());
-    case 0xda:
-      return decodeString(r, r.u16());
-    case 0xdc:
-      return decodeArray(r, r.u16());
-    case 0xde:
-      return decodeMap(r, r.u16());
+    case 0xd2: return r.u32() | 0;
+    case 0xd9: return decodeString(r, r.byte());
+    case 0xda: return decodeString(r, r.u16());
+    case 0xdc: return decodeArray(r, r.u16());
+    case 0xde: return decodeMap(r, r.u16());
     default:
       throw new Error(`fromMsgPack: unknown byte 0x${first.toString(16)}.`);
   }

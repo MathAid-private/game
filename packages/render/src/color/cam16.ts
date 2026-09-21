@@ -289,7 +289,7 @@ export function cam16FromXYZ<S extends ColorSpaceDef<string>>(
   const C = t ** 0.9 * Math.sqrt(J / 100) * (1.64 - 0.29 ** P.n) ** 0.73;
   const M = C * P.FL ** 0.25;
   const Q = (4 / P.c) * Math.sqrt(J / 100) * (P.Aw + 4) * P.FL ** 0.25;
-  const s = 50 * Math.sqrt((P.c * a) / (P.Aw + 4));
+  const s = 100 * Math.sqrt(M / Q);
 
   return { J, C, h, M, s, Q };
 }
@@ -334,8 +334,8 @@ export function xyzFromCAM16(cam: CAM16, env: CAM16Env = {}): ColorValue<typeof 
   // Recover A from J.
   const A = P.Aw * (J / 100) ** (1 / (P.c * P.z));
 
-  // Compute p1, p2, p3.
-  const p1 = (50000 / 13) * P.Nc * P.Ncb * et;
+  // Compute p2, p3. p1 is computed inside the branch because it
+  // depends on t.
   const p2 = A / P.Nbb + 0.305;
   const p3 = 21 / 20;
 
@@ -344,6 +344,7 @@ export function xyzFromCAM16(cam: CAM16, env: CAM16Env = {}): ColorValue<typeof 
   let a = 0;
   let b = 0;
   if (t !== 0) {
+    const p1 = ((50000 / 13) * P.Nc * P.Ncb * et) / t;
     if (Math.abs(sinH) >= Math.abs(cosH)) {
       const p4 = p1 / sinH;
       b =
