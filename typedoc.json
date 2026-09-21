@@ -1,0 +1,9 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPointStrategy": "packages",
+  "entryPoints": [
+    "packages/*",
+    "apps/*"
+  ],
+  "out": "generated/docs/typedoc"
+}

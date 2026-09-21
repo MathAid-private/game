@@ -8,6 +8,7 @@
     "build": "pnpm run build:packages",
     "test": "vitest run",
     "test:watch": "vitest",
+    "docs": "typedoc",
     "dev:packages": "pnpm --filter \"./packages/**\" recursive --parallel run dev",
     "clean:packages": "if exist packages\\loop\\node_modules rmdir /s /q packages\\loop\\node_modules && if exist packages\\loop\\dist rmdir /s /q packages\\loop\\dist && if exist packages\\math\\node_modules rmdir /s /q packages\\math\\node_modules && if exist packages\\math\\dist rmdir /s /q packages\\math\\dist && if exist packages\\render\\node_modules rmdir /s /q packages\\render\\node_modules && if exist packages\\render\\dist rmdir /s /q packages\\render\\dist && if exist packages\\input\\node_modules rmdir /s /q packages\\input\\node_modules && if exist packages\\input\\dist rmdir /s /q packages\\input\\dist && if exist packages\\games\\node_modules rmdir /s /q packages\\games\\node_modules && if exist packages\\games\\dist rmdir /s /q packages\\games\\dist",
     "clean:apps": "if exist apps\\web\\node_modules rmdir /s /q apps\\web\\node_modules && if exist apps\\web\\.vite rmdir /s /q apps\\web\\.vite && if exist dist rmdir /s /q dist",
