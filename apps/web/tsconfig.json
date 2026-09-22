@@ -20,7 +20,8 @@
 
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true
   },
   "include": ["scripts/**/*"]
 }
