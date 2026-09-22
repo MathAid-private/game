@@ -170,9 +170,7 @@ export class VariableTimestepDriver<G extends IGame = IGame> implements ISimulat
  * @see {@link VariableTimestepDriver}
  * @author MathAid
  */
-export class CappedVariableTimestepDriver<G extends IGame = IGame>
-  implements ISimulationDriver<G>
-{
+export class CappedVariableTimestepDriver<G extends IGame = IGame> implements ISimulationDriver<G> {
   readonly #metrics: PerformanceMetrics;
   readonly #game: G;
   readonly #timeClock: IClock;
@@ -553,7 +551,8 @@ export class AdaptiveTimestepDriver<G extends IGame = IGame> implements ISimulat
     this.#lastNow = nowNanos;
 
     // The interval tracks the smoothed frame time, clamped around the target rate.
-    this.#ema = this.#ema === 0 ? elapsed : this.#ema * (1 - EMA_SMOOTHING) + elapsed * EMA_SMOOTHING;
+    this.#ema =
+      this.#ema === 0 ? elapsed : this.#ema * (1 - EMA_SMOOTHING) + elapsed * EMA_SMOOTHING;
     this.#interval = Math.min(
       this.#target * MAX_INTERVAL_FACTOR,
       Math.max(this.#target * MIN_INTERVAL_FACTOR, this.#ema),

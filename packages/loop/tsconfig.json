@@ -35,7 +35,8 @@
     /* Interop Constraints */
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

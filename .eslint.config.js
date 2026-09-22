@@ -1,6 +1,6 @@
 import eslint from '@eslint/js';
-import tseslint from 'typescript-eslint';
 import importPlugin from 'eslint-plugin-import';
+import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   // Global ignores
@@ -27,6 +27,13 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
+        {
+          prefer: 'type-imports',
+          fixStyle: 'separate-type-imports',
+        },
+      ],
 
       // Enforce strict import ordering
       'import/order': [
