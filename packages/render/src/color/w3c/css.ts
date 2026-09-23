@@ -7,9 +7,10 @@
  * rgb, hsl, oklch, display-p3, and rec2020 forms.
  *
  * @description
- * The parser is a small recursive-descent parser. It does not use
- * regular expressions. The CSS grammar has nested functions and
- * optional commas. A regex would be fragile.
+ * The parser is a small recursive-descent parser. It avoids regex for
+ * tokenizing the grammar, not for whitespace splitting. The CSS
+ * grammar has nested functions and optional commas. A regex would
+ * be fragile.
  *
  * ```text
  *   Supported input forms:

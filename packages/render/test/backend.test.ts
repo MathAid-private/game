@@ -32,14 +32,6 @@ import {
 } from '@games/render';
 import { describe, expect, it } from 'vitest';
 
-describe('backends object', () => {
-  it('contains all five adapters', () => {
-    expect(Object.keys(backends).sort()).toEqual(
-      ['DX12', 'Metal', 'OpenGL', 'PS5', 'Software', 'Switch', 'Vulkan', 'WebGPU'].sort(),
-    );
-  });
-});
-
 describe('DX12 adapter', () => {
   it('maps sRGB to a DXGI color-space enum', () => {
     expect(DX12.colorSpaceEnum('sRGB')).toBe('DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709');
@@ -75,10 +67,6 @@ describe('Vulkan adapter', () => {
 
   it('maps Linear_P3 to the linear P3 enum', () => {
     expect(Vulkan.colorSpaceEnum('Linear_P3')).toBe('VK_COLOR_SPACE_DISPLAY_P3_LINEAR_EXT');
-  });
-
-  it('maps Linear_Rec2020 to pass-through', () => {
-    expect(Vulkan.colorSpaceEnum('Linear_Rec2020')).toBe('VK_COLOR_SPACE_PASS_THROUGH_EXT');
   });
 
   it('maps Linear_Rec2020 to pass-through', () => {

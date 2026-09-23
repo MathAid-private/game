@@ -11,7 +11,7 @@
  * @author MathAid
  */
 
-import { Display_P3, fromCSS, HSL, make, OKLCh, sRGB, toCSS } from '@games/render';
+import { Display_P3, fromCSS, make, OKLCh, sRGB, toCSS } from '@games/render';
 import { describe, expect, it } from 'vitest';
 
 describe('fromCSS hex', () => {
@@ -161,6 +161,3 @@ describe('CSS round-trip', () => {
     expect(back.c1).toBeCloseTo(0.7, 3);
   });
 });
-
-// Quiet the unused import warning.
-void HSL;

@@ -267,7 +267,19 @@ function encodeMap(w: Writer, m: Record<string, unknown>): void {
 export function fromMsgPack(data: Uint8Array): Serializable {
   const reader = new Reader(data);
   const value = decodeValue(reader);
+
+  assertBufferEnd(reader);
+
   return value as Serializable;
+}
+/**
+ * @summary Asserts that the reader is at the end of the stream
+ * @param {AsyncReader} r The reader to be checked
+ */
+function assertBufferEnd(r: Reader) {
+  if (!r.isEob()) {
+    throw new RangeError('Buffer end not reached, may be corrupt');
+  }
 }
 
 // -----------------------------------------------------------------
@@ -646,7 +658,19 @@ async function encodeMapStream(sink: ChunkedSink, m: Record<string, unknown>): P
 export async function fromMsgPackStream(source: AsyncIterable<Uint8Array>): Promise<Serializable> {
   const reader = new AsyncReader(source);
   const value = await decodeValueStream(reader);
+
+  assertStreamEnd(reader);
+
   return value as Serializable;
+}
+/**
+ * @summary Asserts that the reader is at the end of the stream
+ * @param {AsyncReader} r The reader to be checked
+ */
+function assertStreamEnd(r: AsyncReader) {
+  if (!r.isEos()) {
+    throw new RangeError('Stream end not reached, may be corrupt');
+  }
 }
 
 /**
@@ -724,6 +748,11 @@ class AsyncReader {
     }
     this.current = r.value;
     this.pos = 0;
+  }
+
+  /** @summary Is end of stream */
+  isEos(): boolean {
+    return !this.current || this.current[this.pos + 1] === undefined
   }
 }
 
@@ -828,6 +857,11 @@ class Reader {
   f64(): number {
     const b = this.bytes(8);
     return new DataView(b.buffer, b.byteOffset, 8).getFloat64(0, false);
+  }
+
+  /** @summary Is end of buffer */
+  isEob(): boolean {
+    return this.buf[this.pos + 1] === undefined
   }
 }
 

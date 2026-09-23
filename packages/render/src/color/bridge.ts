@@ -219,10 +219,8 @@ function toByte(v: number): number {
  * Convert an array of colors from a source space to a target space.
  *
  * @description
- * The function is the same as calling `convert` in a loop. It is
- * faster because it hoists the matrix and transfer lookups out of the
- * loop. The per-color work is a matrix multiply and a few function
- * calls.
+ * The function is the same as calling `convert` in a loop. The per-color
+ * work is a matrix multiply and a few function calls.
  *
  * The output array is a new array. The inputs are not changed.
  *

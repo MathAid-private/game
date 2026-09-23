@@ -1313,7 +1313,6 @@ export function withAlpha<S extends ColorSpaceDef<string>>(
  * code. Use `convert` instead.
  *
  * @internal
- * @private
  */
 export const _internal = {
   toXYZ,

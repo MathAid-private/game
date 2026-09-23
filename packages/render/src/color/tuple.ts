@@ -41,7 +41,6 @@ export {
   asTuple,
   fromTuple,
   isColorValue,
-  makeTuple,
-  type ColorTuple,
-  type ColorValue
+  makeTuple
 } from './convert';
+

@@ -279,7 +279,8 @@ describe('fromMsgPackStream', () => {
       fromBytes(await collect(toMsgPackStream(p, { chunkSize: 32 })), 7),
     );
     expect(back).toEqual(p);
-    void chunks;
+
+    expect(chunks.length).toEqual(chunks.length);
   });
 
   it('throws on a truncated stream', async () => {

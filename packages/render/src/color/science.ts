@@ -26,9 +26,9 @@
  */
 
 import { adapt } from './adaptation';
-import { type ColorValue, convert, make } from './convert';
+import { type ColorValue, convert } from './convert';
 import { deltaE2000 } from './difference';
-import { type ColorSpaceDef, CIE_Lab, sRGB, XYZ_D65 } from './space';
+import { type ColorSpaceDef, XYZ_D65 } from './space';
 
 // -----------------------------------------------------------------
 //  Spectral locus table (CIE 1931 2-degree observer)
@@ -44,7 +44,7 @@ import { type ColorSpaceDef, CIE_Lab, sRGB, XYZ_D65 } from './space';
  * tables. Interpolate between entries for finer resolution.
  */
 const SPECTRAL_LOCUS: ReadonlyArray<readonly [number, number, number]> = [
-  [380, 0.1741, 0.0050],
+  [380, 0.1741, 0.005],
   [390, 0.1738, 0.0049],
   [400, 0.1733, 0.0048],
   [410, 0.1726, 0.0048],
@@ -52,10 +52,10 @@ const SPECTRAL_LOCUS: ReadonlyArray<readonly [number, number, number]> = [
   [430, 0.1689, 0.0069],
   [440, 0.1644, 0.0109],
   [450, 0.1566, 0.0177],
-  [460, 0.1440, 0.0297],
+  [460, 0.144, 0.0297],
   [470, 0.1241, 0.0578],
   [480, 0.0913, 0.1327],
-  [490, 0.0454, 0.2950],
+  [490, 0.0454, 0.295],
   [500, 0.0082, 0.5384],
   [510, 0.0139, 0.7502],
   [520, 0.0743, 0.8338],
@@ -66,14 +66,14 @@ const SPECTRAL_LOCUS: ReadonlyArray<readonly [number, number, number]> = [
   [570, 0.4441, 0.5547],
   [580, 0.5125, 0.4866],
   [590, 0.5752, 0.4242],
-  [600, 0.6270, 0.3725],
-  [610, 0.6658, 0.3340],
+  [600, 0.627, 0.3725],
+  [610, 0.6658, 0.334],
   [620, 0.6915, 0.3083],
-  [630, 0.7079, 0.2920],
-  [640, 0.7190, 0.2809],
-  [650, 0.7260, 0.2740],
-  [660, 0.7300, 0.2700],
-  [670, 0.7320, 0.2680],
+  [630, 0.7079, 0.292],
+  [640, 0.719, 0.2809],
+  [650, 0.726, 0.274],
+  [660, 0.73, 0.27],
+  [670, 0.732, 0.268],
   [680, 0.7334, 0.2666],
   [690, 0.7344, 0.2656],
   [700, 0.7347, 0.2653],
@@ -88,7 +88,7 @@ const SPECTRAL_LOCUS: ReadonlyArray<readonly [number, number, number]> = [
 ];
 
 /** The chromaticity of the D65 white point. */
-const D65_XY = [0.3127, 0.3290] as const;
+const D65_XY = [0.3127, 0.329] as const;
 
 // -----------------------------------------------------------------
 //  Chromaticity
@@ -153,19 +153,12 @@ export function chromaticityCoordinates<S extends ColorSpaceDef<string>>(
  * dominantWavelength(make(sRGB, 1, 0, 0));  // near 611
  * dominantWavelength(make(sRGB, 0, 0, 1));  // near 465
  */
-export function dominantWavelength<S extends ColorSpaceDef<string>>(
-  color: ColorValue<S>,
-): number {
+export function dominantWavelength<S extends ColorSpaceDef<string>>(color: ColorValue<S>): number {
   const { x, y } = chromaticityCoordinates(color);
   return findLocusCrossing(D65_XY[0], D65_XY[1], x, y);
 }
 
-function findLocusCrossing(
-  wx: number,
-  wy: number,
-  px: number,
-  py: number,
-): number {
+function findLocusCrossing(wx: number, wy: number, px: number, py: number): number {
   const dx = px - wx;
   const dy = py - wy;
   let bestWavelength = 550;
@@ -235,13 +228,11 @@ function findLocusCrossing(
  * colorTemperature(make(sRGB, 1, 1, 1));         // near 6500
  * colorTemperature(make(sRGB, 1, 0.8, 0.6));     // near 3000
  */
-export function colorTemperature<S extends ColorSpaceDef<string>>(
-  color: ColorValue<S>,
-): number {
+export function colorTemperature<S extends ColorSpaceDef<string>>(color: ColorValue<S>): number {
   const { x, y } = chromaticityCoordinates(color);
   const denom = 0.1858 - y;
   if (Math.abs(denom) < 1e-6) return 6500;
-  const n = (x - 0.3320) / denom;
+  const n = (x - 0.332) / denom;
   const cct = 449 * n ** 3 + 3525 * n ** 2 + 6823.3 * n + 5520.33;
   return Math.max(1000, Math.min(25000, cct));
 }
@@ -278,10 +269,7 @@ export function colorTemperature<S extends ColorSpaceDef<string>>(
  * metamerCheck(color1, color2);                       // D65 vs A
  * metamerCheck(color1, color2, { test: 'F11' });      // if F11 is added
  */
-export function metamerCheck<
-  A extends ColorSpaceDef<string>,
-  B extends ColorSpaceDef<string>,
->(
+export function metamerCheck<A extends ColorSpaceDef<string>, B extends ColorSpaceDef<string>>(
   a: ColorValue<A>,
   b: ColorValue<B>,
   opts: {
@@ -306,8 +294,3 @@ export function metamerCheck<
 
   return deltaRef < threshold && deltaTest > threshold;
 }
-
-// Suppress "unused import" for `make` and `sRGB` when tree-shaken.
-void make;
-void sRGB;
-void CIE_Lab;

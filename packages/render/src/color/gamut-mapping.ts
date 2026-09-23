@@ -37,7 +37,15 @@
  * @author MathAid
  */
 
-import { ColorTuple, type ColorValue, convert, fromTuple, isColorValue, isInRange, make } from './convert';
+import {
+  type ColorTuple,
+  type ColorValue,
+  convert,
+  fromTuple,
+  isColorValue,
+  isInRange,
+  make,
+} from './convert';
 import { type ColorSpaceDef, OKLCh, OKLab } from './space';
 
 // -----------------------------------------------------------------
@@ -99,7 +107,7 @@ const DELTA_E_EPSILON = 0.02;
  * cube roots all contribute. Real chromatic colors have chroma above
  * 0.01. This threshold separates the two.
  */
-const GRAY_CHROMA_THRESHOLD = 1e-3
+const GRAY_CHROMA_THRESHOLD = 1e-3;
 
 /**
  * @summary
@@ -213,27 +221,18 @@ export function checkGamut<S extends ColorSpaceDef<string>, T extends ColorSpace
  * // Fast clamp, hue-shifting.
  * const fast = mapToGamut(p3Color, sRGB, 'clamp');
  */
-export function mapToGamut<
-  S extends ColorSpaceDef<string>,
-  T extends ColorSpaceDef<string>,
->(
+export function mapToGamut<S extends ColorSpaceDef<string>, T extends ColorSpaceDef<string>>(
   color: ColorValue<S>,
   targetSpace: T,
   method?: GamutMappingMethod,
 ): ColorValue<T>;
-export function mapToGamut<
-  S extends ColorSpaceDef<string>,
-  T extends ColorSpaceDef<string>,
->(
+export function mapToGamut<S extends ColorSpaceDef<string>, T extends ColorSpaceDef<string>>(
   color: ColorTuple<S>,
   from: S,
   targetSpace: T,
   method?: GamutMappingMethod,
 ): ColorValue<T>;
-export function mapToGamut<
-  S extends ColorSpaceDef<string>,
-  T extends ColorSpaceDef<string>,
->(
+export function mapToGamut<S extends ColorSpaceDef<string>, T extends ColorSpaceDef<string>>(
   color: ColorValue<S> | ColorTuple<S>,
   a: S | T,
   b?: T | GamutMappingMethod,

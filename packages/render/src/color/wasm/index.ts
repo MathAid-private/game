@@ -54,6 +54,9 @@ export const wasmReady = false;
  *
  * @example
  * const out = convertBatchSIMD(encodedColors, Linear_sRGB);
+ * 
+ * @throws {ReferenceError} Stating that wasm is not implemented if
+ * {@linkcode wasmReady} is `false`
  */
 export function convertBatchSIMD<
   Src extends ColorSpaceDef<string>,
@@ -62,7 +65,8 @@ export function convertBatchSIMD<
   if (wasmReady) {
     // The WASM path is a future addition. When it lands, add the
     // dispatch here. The interface does not change.
-    return convertBatchFast(colors, dst);
+    // return convertBatchFast(colors, dst);
+    throw new ReferenceError('WASM not implemented');
   }
   return convertBatchFast(colors, dst);
 }

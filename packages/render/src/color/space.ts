@@ -1255,6 +1255,9 @@ export const JzCzHz = makeSpace('JzCzHz', {
  * function describe(space: AnyColorSpace): string {
  *   return `${space.id}: ${space.descriptor.name}`;
  * }
+ * 
+ * @note This is a closed union. Custom spaces built with `makeSpace`
+ * are not part of it.
  */
 export type AnyColorSpace =
   | typeof sRGB

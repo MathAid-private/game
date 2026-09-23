@@ -42,6 +42,8 @@ import { type ColorSpaceDef } from '../space';
  *
  * @param colors - The source colors.
  * @param dst - The destination space.
+ * @param {boolean} [strict=false] Flag that allows checking every
+ * element. Slow, but type safe. The default is false
  * @returns A new array of `ColorValue<Dst>`.
  *
  * @example
@@ -50,14 +52,16 @@ import { type ColorSpaceDef } from '../space';
 export function convertBatchFast<
   Src extends ColorSpaceDef<string>,
   Dst extends ColorSpaceDef<string>,
->(colors: ReadonlyArray<ColorValue<Src>>, dst: Dst): ReadonlyArray<ColorValue<Dst>> {
+>(colors: ReadonlyArray<ColorValue<Src>>, dst: Dst, strict: boolean = false): ReadonlyArray<ColorValue<Dst>> {
   if (colors.length === 0) return [];
 
   const first = colors[0]!;
   const src = first._space;
 
+  const isSameSpace = (s: boolean) => !s ? src.id === dst.id : colors.every(c => c._space.id === dst.id);
+
   // Same-space shortcut.
-  if (src.id === dst.id) {
+  if (isSameSpace(strict)) {
     const out: ColorValue<Dst>[] = new Array(colors.length);
     for (let i = 0; i < colors.length; i++) {
       out[i] = colors[i] as unknown as ColorValue<Dst>;
