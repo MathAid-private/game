@@ -16,7 +16,7 @@ export default tseslint.config(
       import: importPlugin,
     },
     rules: {
-      // Styling rules aligned with Standard JS practices
+      // Style rules that follow Standard JS
       quotes: ['error', 'single', { avoidEscape: true }],
       semi: ['error', 'always'],
       'no-trailing-spaces': 'error',
