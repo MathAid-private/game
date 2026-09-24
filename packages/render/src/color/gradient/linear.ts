@@ -22,9 +22,10 @@
  * @author MathAid
  */
 
+import type { Point2D } from '@/geometry';
 import { type ColorValue } from '../convert';
 import { type ColorSpaceDef } from '../space';
-import { type GradientStop, type Point2D, sampleStops } from './types';
+import { type GradientStop, sampleStops } from './types';
 
 // -----------------------------------------------------------------
 //  Type

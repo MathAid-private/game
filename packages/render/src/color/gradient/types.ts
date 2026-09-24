@@ -24,26 +24,6 @@ import { type ColorValue, convert, make } from '../convert';
 import { type ColorSpaceDef, OKLab } from '../space';
 
 // -----------------------------------------------------------------
-//  Point
-// -----------------------------------------------------------------
-
-/**
- * @summary
- * A 2D point in gradient space.
- *
- * @description
- * The coordinates are in the same space as the sample call. For UI
- * gradients, this is often pixels or normalized UV. For sprite work,
- * it is texture coordinates.
- */
-export interface Point2D {
-  /** The horizontal coordinate. */
-  readonly x: number;
-  /** The vertical coordinate. */
-  readonly y: number;
-}
-
-// -----------------------------------------------------------------
 //  Stop
 // -----------------------------------------------------------------
 

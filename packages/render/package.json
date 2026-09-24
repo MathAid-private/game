@@ -7,10 +7,12 @@
     "build": "tsc",
     "dev": "tsc --watch"
   },
-  "dependencies": {
-    "@games/math": "workspace:*"
-  },
   "devDependencies": {
+    "@types/node": "24.1.0",
+    "@webgpu/types": "^0.1.74",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "koffi": "^3.3.1"
   }
 }

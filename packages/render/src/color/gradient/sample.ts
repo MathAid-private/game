@@ -13,13 +13,13 @@
  * @author MathAid
  */
 
+import type { Point2D } from '@/geometry';
 import { type ColorValue } from '../convert';
 import { type ColorSpaceDef, sRGB } from '../space';
 import { type LinearGradient, sampleLinear } from './linear';
 import { type MultiStopGradient, sampleMultiStop } from './multi';
 import { type PatternRaster, samplePattern } from './pattern';
 import { type RadialGradient, sampleRadial } from './radial';
-import { type Point2D } from './types';
 
 // -----------------------------------------------------------------
 //  Union

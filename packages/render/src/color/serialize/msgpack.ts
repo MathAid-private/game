@@ -46,19 +46,36 @@ import type { Serializable } from './types';
 // -----------------------------------------------------------------
 
 /**
- * @summary
- * Encode a `Serializable` to a `Uint8Array`.
+ * @summary Encode a JSON-compatible value to a `Uint8Array`.
  *
  * @description
- * The encoder writes the value and returns the bytes.
+ * The encoder writes only the types the serializer produces: nil,
+ * booleans, numbers, strings, arrays, and objects. A value outside that
+ * set throws with the type name.
  *
- * @param input - The palette or gradient.
- * @returns A `Uint8Array` with the MessagePack-encoded data.
+ * The function accepts any JSON-compatible value. The color module calls
+ * it with a {@linkcode Serializable}. The render module calls it with a
+ * {@linkcode SerializedFrame}. The signature is widened to `unknown` so
+ * every caller shares one encoder.
  *
  * @example
+ * Example 1: Encode a palette
+ * ```ts
  * const bytes = toMsgPack(packPalette([make(sRGB, 1, 0, 0)]));
+ * ```
+ *
+ * @example 2: Encode a frame
+ * ```ts
+ * const bytes = toMsgPack(frameToSerialized(frame));
+ * ```
+ *
+ * @param {unknown} input The value to encode.
+ * @returns {Uint8Array} The MessagePack bytes.
+ * @throws {Error} When a channel value is not finite or a value has an
+ * unsupported type.
+ * @author MathAid
  */
-export function toMsgPack(input: Serializable): Uint8Array {
+export function toMsgPack(input: unknown): Uint8Array {
   const writer = new Writer(256);
   encodeValue(writer, input);
   return writer.toBytes();
@@ -363,7 +380,7 @@ export interface MsgPackStreamOptions {
  * The async generator works everywhere.
  */
 export async function* toMsgPackStream(
-  input: Serializable,
+  input: unknown,
   opts: MsgPackStreamOptions = {},
 ): AsyncGenerator<Uint8Array, void, void> {
   const chunkSize = opts.chunkSize ?? 65536;
@@ -920,4 +937,70 @@ function decodeMap(r: Reader, len: number): Record<string, unknown> {
     out[k] = decodeValue(r);
   }
   return out;
+}
+
+/**
+ * @summary Decode a MessagePack byte array to an unknown value.
+ *
+ * @description
+ * The counterpart of {@linkcode toMsgPack}. Returns `unknown`. The
+ * caller is responsible for validating the shape. The color module's
+ * {@linkcode fromMsgPack} calls this and casts to `Serializable`. The
+ * render module's `fromFrameMsgPack` calls this and validates with
+ * {@linkcode validateSerializedFrame}.
+ *
+ * @example
+ * Example 1: Decode and validate
+ * ```ts
+ * const raw = decodeAny(bytes);
+ * if (isPalette(raw)) { ... }
+ * ```
+ *
+ * @example 2: Decode a frame
+ * ```ts
+ * const raw = decodeAny(bytes);
+ * validateSerializedFrame(raw);
+ * ```
+ *
+ * @param {Uint8Array} data The MessagePack bytes.
+ * @returns {unknown} The decoded value.
+ * @throws {Error} When the bytes are malformed.
+ * @author MathAid
+ */
+export function decodeAny(data: Uint8Array): unknown {
+  const reader = new Reader(data);
+  return decodeValue(reader);
+}
+
+/**
+ * @summary Stream-decode a MessagePack byte source to an unknown value.
+ *
+ * @description
+ * The counterpart of {@linkcode toMsgPackStream}. Accepts any
+ * `AsyncIterable<Uint8Array>`. The source is not pulled until its bytes
+ * are needed. Returns `unknown`.
+ *
+ * @example
+ * Example 1: Decode a Node stream
+ * ```ts
+ * import { createReadStream } from 'node:fs';
+ * const raw = await decodeAnyStream(createReadStream('data.msgpack'));
+ * ```
+ *
+ * @example 2: Decode a byte-by-byte source
+ * ```ts
+ * const raw = await decodeAnyStream(fromBytes(bytes, 1));
+ * ```
+ *
+ * @param {AsyncIterable<Uint8Array>} source The input bytes.
+ * @returns {Promise<unknown>} The decoded value.
+ * @throws {Error} When the stream ends mid-value or the bytes are
+ * malformed.
+ * @author MathAid
+ */
+export async function decodeAnyStream(
+  source: AsyncIterable<Uint8Array>,
+): Promise<unknown> {
+  const reader = new AsyncReader(source);
+  return decodeValueStream(reader);
 }

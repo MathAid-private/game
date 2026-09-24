@@ -28,10 +28,9 @@
  * @author MathAid
  */
 
+import type { Point2D } from '@/geometry';
 import { type ColorValue, make } from '../convert';
 import { type ColorSpaceDef, type Mat3, sRGB } from '../space';
-import { type Point2D } from './types';
-
 // -----------------------------------------------------------------
 //  Type
 // -----------------------------------------------------------------
